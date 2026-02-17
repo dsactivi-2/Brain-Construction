@@ -9,82 +9,82 @@ Jeder Punkt muss abgehakt werden bevor das Projekt als fertig gilt.
 - [x] Ordnerstruktur erstellt
 - [x] Master-Checkliste erstellt
 - [x] Task-Liste erstellt (8 Tasks mit Abhaengigkeiten)
-- [ ] Phase 0 gepusht
+- [x] Phase 0 committed
 
 ## Phase 1: Projektplanung
-- [ ] Gesamtuebersicht (Was wird gebaut)
-- [ ] Architektur-Diagramm (Wie haengt alles zusammen)
-- [ ] 10 Agenten-Profile definiert
-  - [ ] Berater (Orchestrator)
-  - [ ] Architekt (Design + Veto)
-  - [ ] Coder (Implementierung + Refactoring)
-  - [ ] Tester + Debugger (Tests + Fehleranalyse)
-  - [ ] Reviewer (Review + Commit + Push)
-  - [ ] Designer (UI/UX + Design-System)
-  - [ ] Analyst (Repo-Analyse + Vergleich)
-  - [ ] Doc-Scanner (Web-Docs scannen + importieren)
-  - [ ] DevOps (CI/CD + Server + Deploy)
-  - [ ] Dokumentierer (Docs + API-Registry) — als Hook + Agent bei Bedarf
-- [ ] 17 Hooks definiert
-  - [ ] SessionStart (startup)
-  - [ ] SessionStart (compact)
-  - [ ] SessionStart (resume)
-  - [ ] UserPromptSubmit
-  - [ ] PreToolUse (Write|Edit)
-  - [ ] PreToolUse (Bash)
-  - [ ] PostToolUse (Write|Edit)
-  - [ ] PostToolUse (Bash)
-  - [ ] PostToolUseFailure
-  - [ ] PreCompact
-  - [ ] Stop
-  - [ ] SubagentStart
-  - [ ] SubagentStop
-  - [ ] Notification
-  - [ ] TeammateIdle
-  - [ ] TaskCompleted
-  - [ ] SessionEnd
-- [ ] Gehirn-System definiert
-  - [ ] HippoRAG 2 (Wissensgraph + Gedaechtnis)
-  - [ ] Agentic RAG (Suchsteuerung + Bewertung)
-  - [ ] Agentic Learning Graphs (Selbst-erweiternd)
-- [ ] Profil-System definiert
-  - [ ] Grundprofil (alle Agenten)
-  - [ ] Rules pro Agent
-  - [ ] Commands pro Agent
-- [ ] Fragenkatalog-System definiert
-  - [ ] Blocker-Fragen
-  - [ ] Offene Fragen (nicht blockierend)
-  - [ ] Beantwortete Fragen
-- [ ] Multi-Model Routing definiert
-  - [ ] Haiku (einfach)
-  - [ ] Sonnet (mittel)
-  - [ ] Opus (komplex)
-- [ ] Kommunikation definiert
-  - [ ] Slack-Integration
-  - [ ] WhatsApp-Integration
-  - [ ] Linear-Integration
-- [ ] Connectoren definiert
-  - [ ] GitHub MCP
-  - [ ] Notion MCP
-  - [ ] Eigene Connectoren (erweiterbar)
-- [ ] Web-Scanner definiert
-  - [ ] URL-Liste mit Markierung (Global/Projekt)
-  - [ ] 7-Tage Scan-Zyklus
-  - [ ] Aenderungserkennung
-  - [ ] Auto-Import in HippoRAG 2
-- [ ] Sync-System definiert
-  - [ ] Git-basiert
-  - [ ] install.sh (Merge statt Ueberschreiben)
-  - [ ] LOCAL.md fuer lokale Anpassungen
-- [ ] Smart Cache definiert
-- [ ] Feedback-Loop definiert
-- [ ] Batch-Processing definiert
-- [ ] Auto-Approval Stufen definiert
-- [ ] Model-Fallback definiert
-- [ ] Fallback-Kette (Agent versagt) definiert
-- [ ] Health-Check Hook definiert
-- [ ] Template-Library definiert
-- [ ] Kosten-Tracking Hook definiert
+- [x] Gesamtuebersicht (Was wird gebaut) — 2026-02-17 22:41
+- [x] Architektur-Diagramm (Wie haengt alles zusammen) — 2026-02-17 22:41
+- [x] 10 Agenten-Profile definiert — 2026-02-17 22:42
+  - [x] Berater (Orchestrator) — 2026-02-17 22:42
+  - [x] Architekt (Design + Veto) — 2026-02-17 22:42
+  - [x] Coder (Implementierung + Refactoring) — 2026-02-17 22:42
+  - [x] Tester + Debugger (Tests + Fehleranalyse) — 2026-02-17 22:42
+  - [x] Reviewer (Review + Commit + Push) — 2026-02-17 22:42
+  - [x] Designer (UI/UX + Design-System) — 2026-02-17 22:42
+  - [x] Analyst (Repo-Analyse + Vergleich) — 2026-02-17 22:42
+  - [x] Doc-Scanner (Web-Docs scannen + importieren) — 2026-02-17 22:42
+  - [x] DevOps (CI/CD + Server + Deploy) — 2026-02-17 22:42
+  - [x] Dokumentierer (Docs + API-Registry) — als Hook + Agent bei Bedarf — 2026-02-17 22:42
+- [x] 17 Hooks definiert — 2026-02-17 22:43
+  - [x] SessionStart (startup) — 2026-02-17 22:43
+  - [x] SessionStart (compact) — 2026-02-17 22:43
+  - [x] SessionStart (resume) — 2026-02-17 22:43
+  - [x] UserPromptSubmit — 2026-02-17 22:43
+  - [x] PreToolUse (Write|Edit) — 2026-02-17 22:43
+  - [x] PreToolUse (Bash) — 2026-02-17 22:43
+  - [x] PostToolUse (Write|Edit) — 2026-02-17 22:43
+  - [x] PostToolUse (Bash) — 2026-02-17 22:43
+  - [x] PostToolUseFailure — 2026-02-17 22:43
+  - [x] PreCompact — 2026-02-17 22:43
+  - [x] Stop — 2026-02-17 22:43
+  - [x] SubagentStart — 2026-02-17 22:43
+  - [x] SubagentStop — 2026-02-17 22:43
+  - [x] Notification — 2026-02-17 22:43
+  - [x] TeammateIdle — 2026-02-17 22:43
+  - [x] TaskCompleted — 2026-02-17 22:43
+  - [x] SessionEnd — 2026-02-17 22:43
+- [x] Gehirn-System definiert — 2026-02-17 22:44
+  - [x] HippoRAG 2 (Wissensgraph + Gedaechtnis) — 2026-02-17 22:44
+  - [x] Agentic RAG (Suchsteuerung + Bewertung) — 2026-02-17 22:44
+  - [x] Agentic Learning Graphs (Selbst-erweiternd) — 2026-02-17 22:44
+- [x] Profil-System definiert — 2026-02-17 22:44
+  - [x] Grundprofil (alle Agenten) — 2026-02-17 22:44
+  - [x] Rules pro Agent — 2026-02-17 22:44
+  - [x] Commands pro Agent — 2026-02-17 22:44
+- [x] Fragenkatalog-System definiert — 2026-02-17 22:44
+  - [x] Blocker-Fragen — 2026-02-17 22:44
+  - [x] Offene Fragen (nicht blockierend) — 2026-02-17 22:44
+  - [x] Beantwortete Fragen — 2026-02-17 22:44
+- [x] Multi-Model Routing definiert — 2026-02-17 22:45
+  - [x] Haiku (einfach) — 2026-02-17 22:45
+  - [x] Sonnet (mittel) — 2026-02-17 22:45
+  - [x] Opus (komplex) — 2026-02-17 22:45
+- [x] Kommunikation definiert — 2026-02-17 22:45
+  - [x] Slack-Integration — 2026-02-17 22:45
+  - [x] WhatsApp-Integration — 2026-02-17 22:45
+  - [x] Linear-Integration — 2026-02-17 22:45
+- [x] Connectoren definiert — 2026-02-17 22:45
+  - [x] GitHub MCP — 2026-02-17 22:45
+  - [x] Notion MCP — 2026-02-17 22:45
+  - [x] Eigene Connectoren (erweiterbar) — 2026-02-17 22:45
+- [x] Web-Scanner definiert — 2026-02-17 22:45
+  - [x] URL-Liste mit Markierung (Global/Projekt) — 2026-02-17 22:45
+  - [x] 7-Tage Scan-Zyklus — 2026-02-17 22:45
+  - [x] Aenderungserkennung — 2026-02-17 22:45
+  - [x] Auto-Import in HippoRAG 2 — 2026-02-17 22:45
+- [x] Sync-System definiert — 2026-02-17 22:45
+  - [x] Git-basiert — 2026-02-17 22:45
+  - [x] install.sh (Merge statt Ueberschreiben) — 2026-02-17 22:45
+  - [x] LOCAL.md fuer lokale Anpassungen — 2026-02-17 22:45
+- [x] Smart Cache definiert — 2026-02-17 22:46
+- [x] Feedback-Loop definiert — 2026-02-17 22:46
+- [x] Batch-Processing definiert — 2026-02-17 22:46
+- [x] Auto-Approval Stufen definiert — 2026-02-17 22:46
+- [x] Model-Fallback definiert — 2026-02-17 22:46
+- [x] Fallback-Kette (Agent versagt) definiert — 2026-02-17 22:46
+- [x] Health-Check Hook definiert — 2026-02-17 22:46
+- [x] Template-Library definiert — 2026-02-17 22:46
+- [x] Kosten-Tracking Hook definiert — 2026-02-17 22:46
 - [ ] Phase 1 gepusht + geprueft
 
 ## Phase 2: Runbook
