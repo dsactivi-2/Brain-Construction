@@ -96,19 +96,19 @@ Jeder Punkt muss abgehakt werden bevor das Projekt als fertig gilt.
 - [x] Phase 2 gepusht — 2026-02-17 22:51
 
 ## Phase 3: Setup-Anleitung
-- [ ] Server-Anforderungen (Light/Standard/Heavy)
-- [ ] Datenbank-Setup
-  - [ ] Neo4j (Graph-DB) — Anbieter + Einrichtung + Verbindung
-  - [ ] Vektor-DB (Qdrant/ChromaDB) — Anbieter + Einrichtung + Verbindung
-  - [ ] Redis (Cache) — Anbieter + Einrichtung + Verbindung
-- [ ] Docker + Docker Compose Setup
-- [ ] MCP-Server Einrichtung
-- [ ] Claude API Einrichtung
-- [ ] Slack/WhatsApp/Linear Webhook Setup
-- [ ] GitHub Repo + CI/CD Setup
-- [ ] DNS + SSL (wenn Cloud)
-- [ ] Empfehlungen: Welcher Anbieter fuer was
-- [ ] Phase 3 gepusht + geprueft
+- [x] Server-Anforderungen (Light/Standard/Heavy + 3 Varianten) — 2026-02-17 22:53
+- [x] Datenbank-Setup — 2026-02-17 22:54
+  - [x] Neo4j (Graph-DB) — Self-Hosted + Managed + Einstellungen erklaert + Verbindung — 2026-02-17 22:54
+  - [x] Vektor-DB (Qdrant) — Self-Hosted + Managed + Einstellungen erklaert + Verbindung — 2026-02-17 22:54
+  - [x] Redis (Cache) — Self-Hosted + Managed + Einstellungen erklaert + Verbindung — 2026-02-17 22:54
+- [x] Docker + Docker Compose Setup (Mac/Windows/Linux) — 2026-02-17 22:55
+- [x] MCP-Server Einrichtung (RAG-API, Doc-Scanner, GitHub, Notion) — 2026-02-17 22:55
+- [x] Claude API Einrichtung — 2026-02-17 22:55
+- [x] Slack/WhatsApp/Linear Webhook Setup — 2026-02-17 22:55
+- [x] GitHub Repo + CI/CD Setup — 2026-02-17 22:56
+- [x] DNS + SSL (Caddy Reverse Proxy) — 2026-02-17 22:56
+- [x] Empfehlungen: Welcher Anbieter fuer was — 2026-02-17 22:56
+- [x] Phase 3 gepusht — 2026-02-17 22:56
 
 ## Phase 4: Installations-Guide
 - [ ] Terminal-Version (Schritt fuer Schritt)
