@@ -1,14 +1,11 @@
-"""Auto-Recall — S2 (Qdrant Semantische Suche)
+"""Auto-Recall — S2 (COMPAT WRAPPER)
 
-Sucht in der mem0_memories Collection nach aehnlichen Erinnerungen.
-Wird von hooks/auto-recall.sh aufgerufen.
+Delegiert an brain.semantic_memory.service.SemanticMemoryService.
+Alte Import-Pfade bleiben funktionsfaehig:
+  from brain.auto_memory.recall import search_memories
 """
 
 from typing import List, Optional
-from datetime import datetime
-
-
-COLLECTION = "mem0_memories"
 
 
 def search_memories(
@@ -28,42 +25,8 @@ def search_memories(
     Returns:
         Liste von Dicts: [{text, scope, type, priority, score, timestamp}]
     """
-    from brain.embeddings import embed_text
-    from brain.db import get_qdrant
-    from qdrant_client.models import Filter, FieldCondition, MatchAny, SearchParams
+    from brain.shared.factory import get_semantic_memory_service
 
-    client = get_qdrant()
-    query_vector = embed_text(query)
-
-    # Filter bauen
-    search_filter = None
-    if scopes:
-        search_filter = Filter(
-            must=[FieldCondition(key="scope", match=MatchAny(any=scopes))]
-        )
-
-    response = client.query_points(
-        collection_name=COLLECTION,
-        query=query_vector,
-        query_filter=search_filter,
-        limit=top_k,
-        score_threshold=min_score,
-        search_params=SearchParams(
-            hnsw_ef=128,          # Search ef (hoeher = genauer, default: ~top_k*2)
-            exact=False,          # Approximate (HNSW), nicht brute-force
-        ),
+    return get_semantic_memory_service().search(
+        query=query, scopes=scopes, top_k=top_k, min_score=min_score,
     )
-
-    memories = []
-    for hit in response.points:
-        payload = hit.payload or {}
-        memories.append({
-            "text": payload.get("text", ""),
-            "scope": payload.get("scope", ""),
-            "type": payload.get("type", ""),
-            "priority": payload.get("priority", 5),
-            "score": round(hit.score, 4),
-            "timestamp": payload.get("timestamp", ""),
-        })
-
-    return memories

@@ -1,19 +1,12 @@
-"""Recall Memory Store — S6 (PostgreSQL + SQLite Fallback)
+"""Recall Memory Store — S6 (COMPAT WRAPPER)
 
-Speichert Konversations-Nachrichten. PostgreSQL primaer, SQLite als Fallback.
+Delegiert an brain.conversation.service via Factory.
+Alte Import-Pfade bleiben funktionsfaehig:
+  from brain.recall_memory.store import save_conversation
 """
 
-import json
-from datetime import datetime, timezone
 
-
-def save_conversation(
-    session_id: str,
-    role: str,
-    content: str,
-    tool_calls: dict = None,
-    metadata: dict = None,
-) -> dict:
+def save_conversation(session_id, role, content, tool_calls=None, metadata=None):
     """Speichert eine Nachricht in der Recall Memory.
 
     Args:
@@ -26,40 +19,11 @@ def save_conversation(
     Returns:
         Dict: {id, stored_in, session_id}
     """
-    tool_calls_json = json.dumps(tool_calls) if tool_calls else None
-    metadata_json = json.dumps(metadata) if metadata else None
-    timestamp = datetime.now(timezone.utc).isoformat()
-
-    # Versuche PostgreSQL zuerst
-    try:
-        from brain.db import get_postgres
-        conn = get_postgres()
-        cur = conn.cursor()
-        cur.execute(
-            """
-            INSERT INTO conversations (session_id, timestamp, role, content, tool_calls, metadata)
-            VALUES (%s, %s, %s, %s, %s, %s)
-            RETURNING id
-            """,
-            (session_id, timestamp, role, content, tool_calls_json, metadata_json),
-        )
-        row_id = cur.fetchone()[0]
-        return {"id": row_id, "stored_in": "postgresql", "session_id": session_id}
-    except Exception:
-        pass
-
-    # Fallback: SQLite
-    try:
-        from brain.db import get_sqlite
-        conn = get_sqlite()
-        cur = conn.execute(
-            """
-            INSERT INTO conversations (session_id, timestamp, role, content, tool_calls, metadata)
-            VALUES (?, ?, ?, ?, ?, ?)
-            """,
-            (session_id, timestamp, role, content, tool_calls_json, metadata_json),
-        )
-        conn.commit()
-        return {"id": cur.lastrowid, "stored_in": "sqlite", "session_id": session_id}
-    except Exception as e:
-        return {"id": None, "stored_in": "error", "error": str(e)}
+    from brain.shared.factory import get_conversation_service
+    return get_conversation_service().save(
+        session_id=session_id,
+        role=role,
+        content=content,
+        tool_calls=tool_calls,
+        metadata=metadata,
+    )
