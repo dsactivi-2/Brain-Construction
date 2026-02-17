@@ -274,7 +274,74 @@ das passende KI-Modell:
 
 ---
 
-## 9. Datenbanken verwalten (nur Admin)
+## 9. Web-Scanner: Dokumentationen ueberwachen
+
+Der Doc-Scanner liest Webseiten und speichert das Wissen im Gehirn.
+So kennt das Team immer die neueste Dokumentation.
+
+**Neue Webseite hinzufuegen:**
+
+```
+/scan-add URL SCOPE --name "NAME" --beschreibung "WOFUER?"
+```
+
+```
+  Beispiel:
+  /scan-add https://react.dev/docs global \
+    --name "React Docs" \
+    --beschreibung "Offizielle React-Doku. Hooks, Komponenten."
+
+  /scan-add https://api.mein-projekt.com projekt \
+    --name "Unsere API" \
+    --beschreibung "Backend REST API. Endpoints, Auth."
+```
+
+**Global vs Projekt — wann was?**
+
+```
+  GLOBAL                          PROJEKT
+  +---------------------------+   +---------------------------+
+  | Fuer ALLE Projekte        |   | Nur fuer EIN Projekt      |
+  |                           |   |                           |
+  | Beispiele:                |   | Beispiele:                |
+  | - Python Docs             |   | - Deine eigene API-Doku   |
+  | - React Docs              |   | - Internes Wiki           |
+  | - MDN Web Docs            |   | - Projekt-Anforderungen   |
+  +---------------------------+   +---------------------------+
+```
+
+**So funktioniert der Scanner:**
+
+```
+  URL hinzufuegen ──→ Seite lesen ──→ Mit letztem Mal vergleichen
+                                              │
+                                    ┌─────────┴──────────┐
+                                    │                    │
+                                 Gleich             Geaendert
+                                    │                    │
+                                 Nichts              In Gehirn
+                                  tun                speichern
+                                                        │
+                                                  Nachricht an dich
+                                                  "React Docs geaendert!"
+```
+
+**Alle Scanner-Befehle:**
+
+```
+/scan-add URL global|projekt     Neue Webseite hinzufuegen
+/scan-list                       Alle ueberwachten Webseiten zeigen
+/scan URL                        Webseite jetzt sofort scannen
+/scan-diff URL                   Was hat sich geaendert?
+/kb-import PFAD global|projekt   Lokale Datei importieren (PDF, MD, YAML)
+/scan-config KEY WERT            Einstellung aendern
+```
+
+**Automatisch:** Alle 7 Tage werden alle URLs automatisch gescannt.
+
+---
+
+## 10. Datenbanken verwalten (nur Admin)
 
 Das System nutzt 3 Datenbanken:
 
@@ -302,7 +369,7 @@ Das System nutzt 3 Datenbanken:
 
 ---
 
-## 10. Server + Deploy (nur Admin)
+## 11. Server + Deploy (nur Admin)
 
 **Anwendung veroeffentlichen (Deploy):**
 
@@ -333,7 +400,7 @@ Das System nutzt 3 Datenbanken:
 
 ---
 
-## 11. Alle Commands (Admin)
+## 12. Alle Commands (Admin)
 
 | Command        | Was passiert                              |
 |----------------|-------------------------------------------|
@@ -363,7 +430,7 @@ Das System nutzt 3 Datenbanken:
 
 ---
 
-## 12. Probleme loesen
+## 13. Probleme loesen
 
 | Problem                          | Loesung                          |
 |----------------------------------|----------------------------------|

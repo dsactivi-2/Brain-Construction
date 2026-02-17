@@ -591,23 +591,269 @@ claude mcp list
 
 ## Seite 43 — Kapitel 10: Web-Scanner
 
-### 10.1 URLs verwalten
+Der Web-Scanner ueberwacht Webseiten (Dokumentationen, APIs, Tutorials) und importiert
+Aenderungen automatisch in das Gehirn-System (HippoRAG 2). So bleibt das Wissen aktuell.
+
+### 10.1 URL hinzufuegen — Schritt fuer Schritt
+
+#### Syntax
 
 ```bash
-/scan-add https://docs.example.com global
-/scan-add https://api.project.com projekt
-/scan-list
+/scan-add URL SCOPE [--name "NAME"] [--beschreibung "TEXT"] [--tags TAG1,TAG2]
 ```
 
-### 10.2 Scan-Einstellungen
+#### Parameter erklaert
+
+| Parameter | Pflicht | Beschreibung |
+|-----------|:-------:|-------------|
+| `URL` | Ja | Die Webseite die gescannt werden soll |
+| `SCOPE` | Ja | `global` = fuer alle Projekte, `projekt` = nur fuer aktuelles Projekt |
+| `--name` | Nein | Kurzname fuer die URL (sonst wird Domain verwendet) |
+| `--beschreibung` | Nein | Was ist auf dieser Seite? Wofuer brauchen wir sie? |
+| `--tags` | Nein | Kategorien, kommagetrennt (z.B. `api,python,auth`) |
+
+#### Global vs Projekt — Unterschied
+
+| | Global | Projekt |
+|---|--------|---------|
+| **Sichtbar fuer** | Alle Projekte, alle Agenten | Nur das aktuelle Projekt |
+| **Gespeichert in** | Allgemeine Wissensdatenbank | Projekt-spezifische Datenbank |
+| **Beispiel** | Python-Docs, React-Docs, MDN | Deine eigene API-Doku, Projekt-Wiki |
+| **Wann verwenden** | Allgemeines Wissen das ueberall gilt | Projekt-spezifisches Wissen |
+
+#### Beispiele
+
+```bash
+# React-Dokumentation — Global, fuer alle Projekte nuetzlich
+/scan-add https://react.dev/reference global \
+  --name "React Docs" \
+  --beschreibung "Offizielle React-Dokumentation. Hooks, Komponenten, APIs." \
+  --tags react,frontend,hooks
+
+# Eigene API-Dokumentation — Nur fuer dieses Projekt
+/scan-add https://api.mein-projekt.com/docs projekt \
+  --name "Mein API" \
+  --beschreibung "REST API unseres Backends. Endpoints, Auth, Fehler-Codes." \
+  --tags api,backend,rest
+
+# Tailwind CSS — Global
+/scan-add https://tailwindcss.com/docs global \
+  --name "Tailwind" \
+  --beschreibung "CSS-Framework Dokumentation. Klassen, Konfiguration." \
+  --tags css,frontend,design
+
+# Internes Wiki — Projekt-spezifisch
+/scan-add https://wiki.firma.com/projekt-x projekt \
+  --name "Projekt-Wiki" \
+  --beschreibung "Interne Anforderungen, Entscheidungen, Architektur-Diagramme." \
+  --tags intern,anforderungen
+```
+
+### 10.2 URL-Liste anzeigen und verwalten
+
+```bash
+# Alle URLs anzeigen
+/scan-list
+
+# Nur globale URLs
+/scan-list --scope global
+
+# Nur Projekt-URLs
+/scan-list --scope projekt
+
+# Nach Tag filtern
+/scan-list --tag api
+```
+
+**Ausgabe-Beispiel:**
+
+```
+┌─────┬──────────────┬────────────────────────────┬─────────┬──────────────┬─────────────┐
+│ #   │ Name         │ URL                        │ Scope   │ Letzter Scan │ Status      │
+├─────┼──────────────┼────────────────────────────┼─────────┼──────────────┼─────────────┤
+│ 1   │ React Docs   │ react.dev/reference        │ Global  │ 2026-02-10   │ Aktuell     │
+│ 2   │ Mein API     │ api.mein-projekt.com/docs  │ Projekt │ 2026-02-12   │ Geaendert!  │
+│ 3   │ Tailwind     │ tailwindcss.com/docs       │ Global  │ 2026-02-10   │ Aktuell     │
+│ 4   │ Projekt-Wiki │ wiki.firma.com/projekt-x   │ Projekt │ 2026-02-14   │ Aktuell     │
+└─────┴──────────────┴────────────────────────────┴─────────┴──────────────┴─────────────┘
+Tags: react(1), frontend(2), api(2), backend(1), css(1), design(1), intern(1)
+```
+
+#### URL entfernen oder bearbeiten
+
+```bash
+# URL entfernen (nach Nummer oder Name)
+/scan-remove 2
+/scan-remove "Mein API"
+
+# URL bearbeiten (Beschreibung aendern)
+/scan-edit 1 --beschreibung "Neue Beschreibung hier"
+
+# Scope aendern (von Projekt zu Global)
+/scan-edit 3 --scope global
+```
+
+### 10.3 Manuell scannen
+
+```bash
+# Eine einzelne URL sofort scannen (ohne auf den Zyklus zu warten)
+/scan https://react.dev/reference
+
+# Alle URLs sofort scannen
+/scan --all
+```
+
+**Was passiert beim Scan:**
+
+```
+  URL eingeben
+       │
+       ▼
+  ┌─────────────────┐
+  │ Seite abrufen    │ ← Cheerio (statisch) oder Puppeteer (JavaScript)
+  └────────┬────────┘
+           │
+           ▼
+  ┌─────────────────┐
+  │ Inhalt parsen    │ ← Text, Code-Bloecke, Tabellen, Links extrahieren
+  └────────┬────────┘
+           │
+           ▼
+  ┌─────────────────┐
+  │ Mit letztem Scan │ ← Diff-Engine: Was hat sich geaendert?
+  │ vergleichen      │
+  └────────┬────────┘
+           │
+     ┌─────┴─────┐
+     │            │
+  Gleich      Geaendert
+     │            │
+     ▼            ▼
+  Nichts     ┌─────────────────┐
+  tun        │ In HippoRAG 2   │ ← Alte Version ersetzen
+             │ importieren      │   Neue Entitaeten/Beziehungen
+             └────────┬────────┘
+                      │
+                      ▼
+             ┌─────────────────┐
+             │ Notification     │ ← Slack/WhatsApp: "React Docs geaendert!"
+             │ senden           │
+             └─────────────────┘
+```
+
+### 10.4 Aenderungen pruefen (Diff)
+
+```bash
+# Diff fuer eine bestimmte URL anzeigen
+/scan-diff https://react.dev/reference
+
+# Diff fuer alle geaenderten URLs
+/scan-diff --all
+```
+
+**Ausgabe-Beispiel:**
+
+```
+Diff fuer: React Docs (react.dev/reference)
+Letzter Scan: 2026-02-10 → Aktueller Scan: 2026-02-17
+
++ NEU: useActionState Hook hinzugefuegt
++ NEU: Abschnitt "Server Components" erweitert
+~ GEAENDERT: useEffect — Neue Warnungen bei Dependencies
+- ENTFERNT: Legacy Context API Beispiele
+
+Importiert: 3 neue Entitaeten, 7 neue Beziehungen in HippoRAG 2
+```
+
+### 10.5 KB-Import (lokale Dateien)
+
+Nicht nur Webseiten — auch lokale Dokumente koennen importiert werden:
+
+```bash
+# Einzelne Datei importieren
+/kb-import ./docs/api-spec.yaml projekt \
+  --beschreibung "OpenAPI Spezifikation unserer REST API"
+
+# Ganzen Ordner importieren
+/kb-import ./docs/ projekt \
+  --beschreibung "Alle Projekt-Dokumentationen"
+
+# PDF importieren
+/kb-import ./handbuch.pdf global \
+  --beschreibung "Python Best Practices Handbuch"
+```
+
+**Unterstuetzte Formate:**
+
+| Format | Endung | Hinweis |
+|--------|--------|---------|
+| Markdown | `.md` | Empfohlen — beste Erkennung |
+| YAML/JSON | `.yaml`, `.json` | Gut fuer API-Specs (OpenAPI, Swagger) |
+| Plain Text | `.txt` | Einfacher Text |
+| PDF | `.pdf` | Wird automatisch in Text konvertiert |
+| HTML | `.html` | Wird geparst wie Webseiten |
+| Code | `.py`, `.js`, `.ts`, etc. | Funktionen + Klassen werden extrahiert |
+
+### 10.6 Automatischer Scan-Zyklus
+
+Der Web-Scanner laeuft automatisch im Hintergrund:
 
 | Einstellung | Default | Beschreibung |
 |------------|---------|-------------|
-| `interval_days` | 7 | Scan-Intervall in Tagen |
-| `auto_import` | true | Automatisch in HippoRAG 2 importieren |
-| `notify_changes` | true | Bei Aenderungen benachrichtigen |
-| `max_depth` | 3 | Max. Link-Tiefe beim Crawlen |
-| `js_rendering` | true | JavaScript rendern (Puppeteer) |
+| `interval_days` | 7 | Alle X Tage wird jede URL gescannt |
+| `auto_import` | true | Aenderungen automatisch in HippoRAG 2 importieren |
+| `notify_changes` | true | Bei Aenderungen Notification senden (Slack/WhatsApp) |
+| `max_depth` | 3 | Wie tief Links auf der Seite gefolgt wird |
+| `js_rendering` | true | JavaScript rendern (noetig fuer SPAs wie React-Docs) |
+| `scan_time` | `03:00` | Uhrzeit wann der Cron-Job laeuft |
+| `retry_on_fail` | 3 | Wie oft bei Fehler wiederholen |
+| `timeout_seconds` | 30 | Max. Wartezeit pro Seite |
+
+**Einstellungen aendern:**
+
+```bash
+# Scan-Intervall auf 3 Tage setzen
+/scan-config interval_days 3
+
+# JavaScript-Rendering ausschalten (schneller, aber manche Seiten unvollstaendig)
+/scan-config js_rendering false
+
+# Scan-Tiefe erhoehen (mehr Unterseiten)
+/scan-config max_depth 5
+```
+
+### 10.7 Beispiel-Workflow: Neue Doku-Quelle einrichten
+
+**Szenario:** Du willst die Next.js Dokumentation ueberwachen.
+
+```
+Schritt 1: URL hinzufuegen
+─────────────────────────
+/scan-add https://nextjs.org/docs global \
+  --name "Next.js Docs" \
+  --beschreibung "Next.js Framework. App Router, Server Components, API Routes." \
+  --tags nextjs,react,fullstack
+
+Schritt 2: Ersten Scan ausfuehren
+──────────────────────────────────
+/scan https://nextjs.org/docs
+→ "Scan gestartet... 47 Seiten gefunden, 312 Entitaeten extrahiert."
+
+Schritt 3: Pruefen was importiert wurde
+────────────────────────────────────────
+/scan-diff https://nextjs.org/docs
+→ "Erster Scan — alles neu. 312 Entitaeten, 891 Beziehungen importiert."
+
+Schritt 4: Testen ob Wissen verfuegbar ist
+──────────────────────────────────────────
+/memory "Wie funktioniert der App Router in Next.js?"
+→ Agent antwortet mit Wissen aus der gescannten Dokumentation.
+
+Schritt 5: Fertig — Ab jetzt automatisch
+─────────────────────────────────────────
+Alle 7 Tage wird die Seite automatisch gescannt.
+Bei Aenderungen bekommst du eine Notification.
+```
 
 ---
 
