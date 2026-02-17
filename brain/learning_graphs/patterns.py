@@ -1,10 +1,9 @@
-"""Learning Graphs — S5 (Neo4j)
+"""Learning Graphs — S5 (COMPAT WRAPPER)
 
-Pattern-Detection, Konsolidierung und Score-Decay.
-Laeuft periodisch (Consolidation: woechentlich, Decay: taeglich).
+Delegiert an brain.knowledge_graph.service.KnowledgeGraphService.
+Alte Import-Pfade bleiben funktionsfaehig:
+  from brain.learning_graphs.patterns import learning_graph_update, consolidate, decay_prune
 """
-
-from datetime import datetime, timezone, timedelta
 
 
 def learning_graph_update(session_data: dict) -> dict:
@@ -17,61 +16,11 @@ def learning_graph_update(session_data: dict) -> dict:
         session_data: Dict mit session_id, entities, tools_used, etc.
 
     Returns:
-        Dict: {patterns_found, patterns_updated}
+        Dict: {patterns_found, patterns_updated, session_id}
     """
-    from brain.db import get_neo4j
+    from brain.shared.factory import get_knowledge_graph_service
 
-    patterns_found = 0
-    patterns_updated = 0
-
-    try:
-        driver = get_neo4j()
-        entities = session_data.get("entities", [])
-        session_id = session_data.get("session_id", "unknown")
-        timestamp = datetime.now(timezone.utc).isoformat()
-
-        with driver.session() as session:
-            # Pattern: Entitaeten die zusammen auftreten
-            for i in range(len(entities)):
-                for j in range(i + 1, len(entities)):
-                    result = session.run(
-                        """
-                        MERGE (p:Pattern {
-                            id: $pattern_id
-                        })
-                        ON CREATE SET
-                            p.entity_a = $entity_a,
-                            p.entity_b = $entity_b,
-                            p.count = 1,
-                            p.first_seen = $timestamp,
-                            p.last_seen = $timestamp,
-                            p.score = 1.0
-                        ON MATCH SET
-                            p.count = p.count + 1,
-                            p.last_seen = $timestamp,
-                            p.score = p.score + 0.1
-                        RETURN p.count AS count
-                        """,
-                        pattern_id=f"{min(entities[i], entities[j])}_{max(entities[i], entities[j])}",
-                        entity_a=entities[i],
-                        entity_b=entities[j],
-                        timestamp=timestamp,
-                    )
-                    record = result.single()
-                    if record:
-                        if record["count"] == 1:
-                            patterns_found += 1
-                        else:
-                            patterns_updated += 1
-
-    except Exception:
-        pass
-
-    return {
-        "patterns_found": patterns_found,
-        "patterns_updated": patterns_updated,
-        "session_id": session_data.get("session_id", ""),
-    }
+    return get_knowledge_graph_service().update_patterns(session_data=session_data)
 
 
 def consolidate() -> dict:
@@ -83,46 +32,9 @@ def consolidate() -> dict:
     Returns:
         Dict: {merged, deleted}
     """
-    from brain.db import get_neo4j
+    from brain.shared.factory import get_knowledge_graph_service
 
-    merged = 0
-    deleted = 0
-
-    try:
-        driver = get_neo4j()
-        with driver.session() as session:
-            # Schwache Patterns loeschen (Score < 0.1)
-            result = session.run(
-                """
-                MATCH (p:Pattern)
-                WHERE p.score < 0.1
-                DELETE p
-                RETURN count(p) AS deleted
-                """
-            )
-            record = result.single()
-            if record:
-                deleted = record["deleted"]
-
-            # Mittlere Patterns: Score halbieren wenn alt
-            threshold = (datetime.now(timezone.utc) - timedelta(days=90)).isoformat()
-            result = session.run(
-                """
-                MATCH (p:Pattern)
-                WHERE p.last_seen < $threshold AND p.score > 0.1
-                SET p.score = p.score * 0.5
-                RETURN count(p) AS merged
-                """,
-                threshold=threshold,
-            )
-            record = result.single()
-            if record:
-                merged = record["merged"]
-
-    except Exception:
-        pass
-
-    return {"merged": merged, "deleted": deleted}
+    return get_knowledge_graph_service().consolidate()
 
 
 def decay_prune() -> dict:
@@ -134,47 +46,6 @@ def decay_prune() -> dict:
     Returns:
         Dict: {decayed, archived}
     """
-    from brain.db import get_neo4j
+    from brain.shared.factory import get_knowledge_graph_service
 
-    decayed = 0
-    archived = 0
-
-    try:
-        driver = get_neo4j()
-        now = datetime.now(timezone.utc)
-
-        with driver.session() as session:
-            # 90-Tage Decay
-            threshold_90 = (now - timedelta(days=90)).isoformat()
-            result = session.run(
-                """
-                MATCH (p:Pattern)
-                WHERE p.last_seen < $threshold
-                SET p.score = p.score * 0.9
-                RETURN count(p) AS decayed
-                """,
-                threshold=threshold_90,
-            )
-            record = result.single()
-            if record:
-                decayed = record["decayed"]
-
-            # 180-Tage Archiv (loeschen)
-            threshold_180 = (now - timedelta(days=180)).isoformat()
-            result = session.run(
-                """
-                MATCH (p:Pattern)
-                WHERE p.last_seen < $threshold
-                DELETE p
-                RETURN count(p) AS archived
-                """,
-                threshold=threshold_180,
-            )
-            record = result.single()
-            if record:
-                archived = record["archived"]
-
-    except Exception:
-        pass
-
-    return {"decayed": decayed, "archived": archived}
+    return get_knowledge_graph_service().decay_prune()

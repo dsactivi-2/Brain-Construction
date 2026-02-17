@@ -1,56 +1,21 @@
-"""Embedding-Generierung — Brain System
+"""Embedding-Generierung — COMPAT WRAPPER
 
-Generiert 384-dimensionale Vektoren mit sentence-transformers (all-MiniLM-L6-v2).
-Lazy-Load: Modell wird erst beim ersten Aufruf geladen.
+Delegiert an brain.shared.embeddings.
+Alte Import-Pfade bleiben funktionsfaehig:
+  from brain.embeddings import embed_text, embed_batch, get_vector_size
 """
 
-from typing import List
+from brain.shared.embeddings import (
+    embed_text,
+    embed_batch,
+    get_vector_size,
+    _get_model,
+)
 
-_model = None
-_MODEL_NAME = "all-MiniLM-L6-v2"
-_VECTOR_SIZE = 384
-
-
-def _get_model():
-    """Laedt das Embedding-Modell (Lazy, Singleton)."""
-    global _model
-    if _model is None:
-        from sentence_transformers import SentenceTransformer
-        _model = SentenceTransformer(_MODEL_NAME)
-    return _model
-
-
-def embed_text(text: str) -> List[float]:
-    """Generiert einen 384-dimensionalen Vektor fuer einen Text.
-
-    Args:
-        text: Der zu embedende Text.
-
-    Returns:
-        Liste mit 384 Floats.
-    """
-    model = _get_model()
-    embedding = model.encode(text, convert_to_numpy=True)
-    return embedding.tolist()
-
-
-def embed_batch(texts: List[str], batch_size: int = 32) -> List[List[float]]:
-    """Generiert Vektoren fuer mehrere Texte (effizient batched).
-
-    Args:
-        texts: Liste von Texten.
-        batch_size: Batch-Groesse fuer parallele Verarbeitung.
-
-    Returns:
-        Liste von 384-dimensionalen Vektoren.
-    """
-    if not texts:
-        return []
-    model = _get_model()
-    embeddings = model.encode(texts, batch_size=batch_size, convert_to_numpy=True)
-    return [e.tolist() for e in embeddings]
-
-
-def get_vector_size() -> int:
-    """Gibt die Vektordimension zurueck (384)."""
-    return _VECTOR_SIZE
+# Re-export fuer volle Rueckwaertskompatibilitaet
+__all__ = [
+    "embed_text",
+    "embed_batch",
+    "get_vector_size",
+    "_get_model",
+]

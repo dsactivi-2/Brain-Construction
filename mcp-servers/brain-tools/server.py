@@ -1,23 +1,26 @@
-"""Brain-Tools MCP Server — Cloud Code Team 02.26
+"""Brain-Tools MCP Server — Cloud Code Team 02.26 (DDD v3)
 
 FastMCP Server der alle Brain-Tools als MCP-Tools exponiert.
 Wird von Claude Code als MCP-Server genutzt (stdio Transport).
+
+DDD v3 Architektur:
+- Alle Tools delegieren an Services via Composition Root (factory.py)
+- Bounded Contexts: Identity, SemanticMemory, KnowledgeGraph, Conversation
+- Application Service: Retrieval (Multi-Source Router)
 
 Optimierungen:
 - Pre-Warm: DB-Verbindungen + Embedding-Modell beim Start laden
 - Error Handling: Strukturierte Fehler-Antworten statt raw Exceptions
 - Caching: Core Memory mit 30s TTL
-- Health-Check: Diagnose-Tool fuer alle 4 DBs
+- Health-Check: Diagnose-Tool fuer alle DBs
 """
 
 import os
 import sys
-import json
 import time
 import logging
 from pathlib import Path
 from typing import Optional, List
-from functools import lru_cache
 
 from fastmcp import FastMCP
 
@@ -51,15 +54,14 @@ mcp = FastMCP("Brain-Tools")
 def _prewarm():
     """Laedt DB-Verbindungen und Embedding-Modell im Hintergrund."""
     try:
-        from brain.db import get_config
-        get_config()
-        log.info("Config geladen")
+        from brain.shared.config import load_config
+        load_config()
+        log.info("Config geladen (shared.config)")
     except Exception as e:
         log.warning(f"Config nicht geladen: {e}")
 
-    # Embedding-Modell vorladen (3s einsparen beim ersten Tool-Call)
     try:
-        from brain.embeddings import _get_model
+        from brain.shared.embeddings import _get_model
         _get_model()
         log.info("Embedding-Modell geladen (all-MiniLM-L6-v2)")
     except Exception as e:
@@ -102,8 +104,8 @@ def _cached_core_memory_read(block=None):
         result["_cached"] = True
         return result
 
-    from brain.core_memory.reader import core_memory_read as _read
-    result = _read(block)
+    from brain.shared.factory import get_identity_service
+    result = get_identity_service().read(block)
     _core_memory_cache[cache_key] = result
     _core_memory_cache_time = now
     result["_cached"] = False
@@ -111,7 +113,7 @@ def _cached_core_memory_read(block=None):
 
 
 # ============================================================
-# S1 — Core Memory
+# S1 — Core Memory (Identity Context)
 # ============================================================
 
 @mcp.tool()
@@ -143,12 +145,12 @@ def core_memory_update(block: str, content: str) -> dict:
     _core_memory_cache = {}
     _core_memory_cache_time = 0
 
-    from brain.core_memory.writer import core_memory_update as _update
-    return _safe_call(_update, block=block, content=content)
+    from brain.shared.factory import get_identity_service
+    return _safe_call(get_identity_service().update, block=block, content=content)
 
 
 # ============================================================
-# S2 — Auto-Recall / Capture
+# S2 — Auto-Recall / Capture (Semantic Memory Context)
 # ============================================================
 
 @mcp.tool()
@@ -169,8 +171,9 @@ def memory_search(
         top_k: Max Ergebnisse (default: 5).
         min_score: Min Aehnlichkeit 0.0-1.0 (default: 0.5).
     """
-    from brain.auto_memory.recall import search_memories
-    return _safe_call(search_memories, query=query, scopes=scopes, top_k=top_k, min_score=min_score)
+    from brain.shared.factory import get_semantic_memory_service
+    return _safe_call(get_semantic_memory_service().search,
+                      query=query, scopes=scopes, top_k=top_k, min_score=min_score)
 
 
 @mcp.tool()
@@ -198,12 +201,13 @@ def memory_store(
         type: Art (entscheidung, fehler, fakt, praeferenz, todo, beobachtung).
         priority: Priority-Score 1-10.
     """
-    from brain.auto_memory.capture import extract_and_store
-    return _safe_call(extract_and_store, text=text, scope=scope, type=type, priority=priority)
+    from brain.shared.factory import get_semantic_memory_service
+    return _safe_call(get_semantic_memory_service().store,
+                      text=text, scope=scope, type=type, priority=priority)
 
 
 # ============================================================
-# S3 — HippoRAG
+# S3 — HippoRAG (Knowledge Graph Context)
 # ============================================================
 
 @mcp.tool()
@@ -218,8 +222,8 @@ def hipporag_retrieve(query: str, top_k: int = 5) -> list:
         query: Suchtext (Entitaeten werden automatisch extrahiert).
         top_k: Max Ergebnisse (default: 5).
     """
-    from brain.hipporag_service.retriever import hipporag_retrieve as _retrieve
-    return _safe_call(_retrieve, query=query, top_k=top_k)
+    from brain.shared.factory import get_knowledge_graph_service
+    return _safe_call(get_knowledge_graph_service().retrieve, query=query, top_k=top_k)
 
 
 @mcp.tool()
@@ -232,12 +236,12 @@ def hipporag_ingest(text: str) -> dict:
     Args:
         text: Der zu indizierende Text.
     """
-    from brain.hipporag_service.indexer import hipporag_ingest as _ingest
-    return _safe_call(_ingest, text=text)
+    from brain.shared.factory import get_knowledge_graph_service
+    return _safe_call(get_knowledge_graph_service().ingest, text=text)
 
 
 # ============================================================
-# S4 — Agentic RAG (Multi-Source Router)
+# S4 — Agentic RAG (Retrieval Application Service)
 # ============================================================
 
 @mcp.tool()
@@ -251,12 +255,12 @@ def rag_route(query: str) -> dict:
     Args:
         query: Suchtext.
     """
-    from brain.agentic_rag.router import rag_route as _route
-    return _safe_call(_route, query=query)
+    from brain.shared.factory import get_retrieval_service
+    return _safe_call(get_retrieval_service().route, query=query)
 
 
 # ============================================================
-# S5 — Learning Graphs
+# S5 — Learning Graphs (Knowledge Graph Context)
 # ============================================================
 
 @mcp.tool()
@@ -269,12 +273,12 @@ def learning_graph_update(session_data: dict) -> dict:
     Args:
         session_data: Dict mit session_id, entities, tools_used.
     """
-    from brain.learning_graphs.patterns import learning_graph_update as _update
-    return _safe_call(_update, session_data=session_data)
+    from brain.shared.factory import get_knowledge_graph_service
+    return _safe_call(get_knowledge_graph_service().update_patterns, session_data=session_data)
 
 
 # ============================================================
-# S6 — Recall Memory
+# S6 — Recall Memory (Conversation Context)
 # ============================================================
 
 @mcp.tool()
@@ -288,8 +292,8 @@ def conversation_search(query: str, limit: int = 10) -> list:
         query: Suchtext.
         limit: Max Ergebnisse (default: 10).
     """
-    from brain.recall_memory.search import conversation_search as _search
-    return _safe_call(_search, query=query, limit=limit)
+    from brain.shared.factory import get_conversation_service
+    return _safe_call(get_conversation_service().search, query=query, limit=limit)
 
 
 @mcp.tool()
@@ -310,8 +314,9 @@ def conversation_search_date(
         agent: Optional — Filtern nach Agent-Name.
         limit: Max Ergebnisse (default: 20).
     """
-    from brain.recall_memory.search import conversation_search_date as _search_date
-    return _safe_call(_search_date, start=start, end=end, agent=agent, limit=limit)
+    from brain.shared.factory import get_conversation_service
+    return _safe_call(get_conversation_service().search_date,
+                      start=start, end=end, agent=agent, limit=limit)
 
 
 # ============================================================
@@ -329,7 +334,7 @@ def brain_health() -> dict:
 
     # Qdrant
     try:
-        from brain.db import get_qdrant
+        from brain.shared.connections import get_qdrant
         client = get_qdrant()
         cols = client.get_collections()
         status["qdrant"] = {"ok": True, "collections": len(cols.collections)}
@@ -338,7 +343,7 @@ def brain_health() -> dict:
 
     # Neo4j
     try:
-        from brain.db import get_neo4j
+        from brain.shared.connections import get_neo4j
         driver = get_neo4j()
         driver.verify_connectivity()
         status["neo4j"] = {"ok": True}
@@ -347,7 +352,7 @@ def brain_health() -> dict:
 
     # Redis
     try:
-        from brain.db import get_redis
+        from brain.shared.connections import get_redis
         r = get_redis()
         r.ping()
         status["redis"] = {"ok": True}
@@ -356,7 +361,7 @@ def brain_health() -> dict:
 
     # PostgreSQL
     try:
-        from brain.db import get_postgres
+        from brain.shared.connections import get_postgres
         conn = get_postgres()
         cur = conn.cursor()
         cur.execute("SELECT count(*) FROM conversations")
@@ -367,7 +372,7 @@ def brain_health() -> dict:
 
     # SQLite
     try:
-        from brain.db import get_sqlite
+        from brain.shared.connections import get_sqlite
         conn = get_sqlite()
         cur = conn.execute("SELECT count(*) FROM conversations")
         count = cur.fetchone()[0]
@@ -375,19 +380,23 @@ def brain_health() -> dict:
     except Exception as e:
         status["sqlite"] = {"ok": False, "error": str(e)}
 
-    # Core Memory
+    # Core Memory (via Identity Service)
     try:
-        from brain.core_memory.reader import core_memory_read as _read
-        cm = _read()
+        from brain.shared.factory import get_identity_service
+        cm = get_identity_service().read()
         blocks = len(cm.get("blocks", {}))
         status["core_memory"] = {"ok": True, "blocks": blocks}
     except Exception as e:
         status["core_memory"] = {"ok": False, "error": str(e)}
 
+    # DDD Architecture Status
+    status["architecture"] = "DDD v3"
+    status["bounded_contexts"] = ["Identity", "SemanticMemory", "KnowledgeGraph", "Conversation"]
+
     # Summary
-    total = len(status)
-    ok = sum(1 for v in status.values() if v["ok"])
-    status["_summary"] = f"{ok}/{total} services healthy"
+    service_count = sum(1 for k, v in status.items() if isinstance(v, dict) and "ok" in v)
+    ok_count = sum(1 for k, v in status.items() if isinstance(v, dict) and v.get("ok"))
+    status["_summary"] = f"{ok_count}/{service_count} services healthy"
 
     return status
 

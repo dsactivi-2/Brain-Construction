@@ -1,18 +1,14 @@
-"""Auto-Capture — S2 (Qdrant Speicherung)
+"""Auto-Capture — S2 (COMPAT WRAPPER)
 
-Speichert neue Erinnerungen in der mem0_memories Collection.
-Wird von hooks/auto-capture.sh aufgerufen.
-Deduplizierung: Pruebt ob aehnlicher Eintrag existiert (Score > 0.95).
+Delegiert an brain.semantic_memory.service.SemanticMemoryService.
+Alte Import-Pfade bleiben funktionsfaehig:
+  from brain.auto_memory.capture import extract_and_store
 """
 
-import uuid
-from datetime import datetime, timezone
 from typing import Optional
 
 
-COLLECTION = "mem0_memories"
-
-# Priority-Defaults nach Type
+# Re-export fuer Rueckwaertskompatibilitaet
 PRIORITY_DEFAULTS = {
     "entscheidung": 9,
     "fehler": 8,
@@ -40,62 +36,8 @@ def extract_and_store(
     Returns:
         Dict: {id, text, scope, type, priority, stored: True/False, reason}
     """
-    from brain.embeddings import embed_text
-    from brain.db import get_qdrant
-    from qdrant_client.models import PointStruct
+    from brain.shared.factory import get_semantic_memory_service
 
-    if priority is None:
-        priority = PRIORITY_DEFAULTS.get(type, 5)
-
-    client = get_qdrant()
-    vector = embed_text(text)
-
-    # Deduplizierung: Pruefen ob sehr aehnlicher Eintrag existiert
-    response = client.query_points(
-        collection_name=COLLECTION,
-        query=vector,
-        limit=1,
-        score_threshold=0.95,
+    return get_semantic_memory_service().store(
+        text=text, scope=scope, type=type, priority=priority,
     )
-
-    if response.points:
-        return {
-            "id": str(response.points[0].id),
-            "text": text,
-            "scope": scope,
-            "type": type,
-            "priority": priority,
-            "stored": False,
-            "reason": f"Duplikat gefunden (Score: {response.points[0].score:.4f})",
-        }
-
-    # Neuen Eintrag speichern
-    point_id = str(uuid.uuid4())
-    timestamp = datetime.now(timezone.utc).isoformat()
-
-    client.upsert(
-        collection_name=COLLECTION,
-        points=[
-            PointStruct(
-                id=point_id,
-                vector=vector,
-                payload={
-                    "text": text,
-                    "scope": scope,
-                    "type": type,
-                    "priority": priority,
-                    "timestamp": timestamp,
-                },
-            )
-        ],
-    )
-
-    return {
-        "id": point_id,
-        "text": text,
-        "scope": scope,
-        "type": type,
-        "priority": priority,
-        "stored": True,
-        "timestamp": timestamp,
-    }
