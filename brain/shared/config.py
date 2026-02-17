@@ -21,14 +21,33 @@ _BRAIN_DIR = os.environ.get(
 )
 
 
+def _resolve_env_vars(obj):
+    """Ersetzt ${VAR} und ${VAR:-default} Platzhalter mit Environment-Variablen."""
+    import re
+    if isinstance(obj, str):
+        def _replace(match):
+            var_expr = match.group(1)
+            if ":-" in var_expr:
+                var_name, default = var_expr.split(":-", 1)
+                return os.environ.get(var_name, default)
+            return os.environ.get(var_expr, match.group(0))
+        return re.sub(r'\$\{([^}]+)\}', _replace, obj)
+    elif isinstance(obj, dict):
+        return {k: _resolve_env_vars(v) for k, v in obj.items()}
+    elif isinstance(obj, list):
+        return [_resolve_env_vars(item) for item in obj]
+    return obj
+
+
 @lru_cache(maxsize=1)
 def load_config() -> dict:
-    """Laedt databases.yaml einmalig."""
+    """Laedt databases.yaml einmalig und ersetzt ${ENV_VAR} Platzhalter."""
     config_path = Path(_CONFIG_DIR) / "databases.yaml"
     if not config_path.exists():
         raise FileNotFoundError(f"databases.yaml nicht gefunden: {config_path}")
     with open(config_path, "r", encoding="utf-8") as f:
-        return yaml.safe_load(f)
+        raw = yaml.safe_load(f)
+    return _resolve_env_vars(raw)
 
 
 def get_config() -> dict:
