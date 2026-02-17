@@ -3,6 +3,8 @@
 > Version: Admin (Vollzugriff) | Stand: Februar 2026
 > Einfache Sprache -- fuer alle verstaendlich
 
+> Ausfuehrliche Version: 05-USER-MANUAL-DETAIL-ADMIN.md
+
 ---
 
 ## 1. Was ist das?
@@ -28,13 +30,13 @@ Agenten, Datenbanken, Server, Einstellungen und Kosten.
   |    +---> Tester         (prueft + findet Fehler)          |
   |    +---> Reviewer       (kontrolliert Qualitaet)          |
   |    +---> Designer       (gestaltet Oberflaechen)          |
-  |    +---> Analyst        (analysiert Anforderungen)        |
+  |    +---> Analyst        (analysiert Repos + Code)          |
   |    +---> Doc-Scanner    (liest externe Dokumente)         |
   |    +---> DevOps         (Server + Deployment)             |
   |    +---> Dokumentierer  (schreibt Anleitungen)            |
   |                                                           |
   |   [ Brain: HippoRAG 2 + Wissensgraphen ]                 |
-  |   [ Datenbanken: Neo4j | Qdrant | Redis ]                |
+  |   [ Datenbanken: Neo4j | Qdrant | Redis | PostgreSQL ]   |
   |   [ 17 Hooks = automatische Regeln ]                     |
   +-----------------------------------------------------------+
 ```
@@ -109,7 +111,7 @@ Jeder Agent hat eine klare Aufgabe:
 | 4  | Tester         | Prueft ob alles funktioniert, findet Fehler |
 | 5  | Reviewer       | Kontrolliert die Code-Qualitaet             |
 | 6  | Designer       | Gestaltet wie es aussieht (UI/UX)           |
-| 7  | Analyst        | Versteht was der Kunde wirklich braucht     |
+| 7  | Analyst        | Analysiert Repos und vergleicht Code        |
 | 8  | Doc-Scanner    | Liest Handbuecher und Dokumentationen       |
 | 9  | DevOps         | Kuemmert sich um Server und Deployment      |
 | 10 | Dokumentierer  | Schreibt Anleitungen und Erklaerungen       |
@@ -198,7 +200,7 @@ So siehst du, wie weit die Arbeit ist:
 ```
 /fortschritt          Gesamtuebersicht
 /status               Status aller Agenten
-/logs                 Detaillierte Protokolle
+docker compose logs   Detaillierte Protokolle (Shell-Befehl, kein Slash-Command)
 ```
 
 **Was die Status-Anzeige bedeutet:**
@@ -242,14 +244,14 @@ Wenn die Arbeit fertig ist:
 
 Als Admin kannst du das System anpassen:
 
-**Hooks verwalten** (automatische Regeln):
+**Hooks verwalten** (automatische Regeln, System-Commands):
 ```
 /hooks                Alle 17 Hooks anzeigen
 /hooks aktivieren 5   Hook Nr. 5 einschalten
 /hooks deaktivieren 3 Hook Nr. 3 ausschalten
 ```
 
-**Kosten ueberwachen:**
+**Kosten ueberwachen** (System-Command):
 ```
 /kosten               Zeigt Kosten-Uebersicht
 ```
@@ -267,7 +269,7 @@ das passende KI-Modell:
   +----------+                       +--------+
 ```
 
-**Updates einspielen:**
+**Updates einspielen** (System-Command):
 ```
 /update               System aktualisieren
 ```
@@ -369,18 +371,30 @@ Dein Team vergisst NIE etwas. Es hat 6 Arten von Gedaechtnis:
 **Einfach gesagt:** Schicht 1+2 sind immer da (wie dein Kurzzeitgedaechtnis).
 Schicht 3-6 werden bei Bedarf geholt (wie Nachschlagen im Buch).
 
-**Befehle:**
+**Befehle nach Schicht:**
+
 ```
+Schicht 1 — Core Memory:
+/core-read BLOCK              Core-Memory-Block lesen (z.B. USER, PROJEKT)
+/core-update BLOCK "WERT"     Core-Memory-Block aktualisieren
+
+Schicht 2 — Auto-Recall (Mem0):
 /memory-search SUCHBEGRIFF    Erinnerungen suchen
 /memory-store "FAKT"          Einen Fakt speichern
+/memory-list                  Alle Erinnerungen auflisten
+/memory-get ID                Einzelne Erinnerung abrufen
 /memory-forget ID             Eine Erinnerung loeschen
+
+Schicht 6 — Recall Memory:
+/conv-search SUCHBEGRIFF      Konversationshistorie durchsuchen
+/conv-search-date VON BIS     Konversationen nach Datum suchen
 ```
 
 ---
 
 ## 11. Datenbanken verwalten (nur Admin)
 
-Das System nutzt 3 Datenbanken:
+Das System nutzt 4 Datenbanken:
 
 ```
   +------------------+------------------------------------+
@@ -395,9 +409,12 @@ Das System nutzt 3 Datenbanken:
   |    Redis         |    Schneller Zwischenspeicher      |
   |    (Cache)       |    "Was wurde gerade benutzt?"     |
   +------------------+------------------------------------+
+  |  PostgreSQL/     |    Komplette Chat-Historie         |
+  |  SQLite          |    speichern (Recall Memory)       |
+  +------------------+------------------------------------+
 ```
 
-**Befehle:**
+**System-Commands:**
 ```
 /db status            Status aller Datenbanken
 /db backup            Sicherung erstellen
@@ -425,46 +442,69 @@ Das System nutzt 3 Datenbanken:
                   /rollback        LIVE!
 ```
 
-**Befehle:**
+**Agent-Commands:**
 ```
 /deploy               Anwendung veroeffentlichen
 /ci                   Build-Pipeline anzeigen
 /rollback             Letzte Version wiederherstellen
-/server               Server-Status anzeigen
 /health               System-Gesundheit pruefen
 /env                  Umgebungsvariablen verwalten
+```
+
+**System-Commands:**
+```
+/server               Server-Status anzeigen (Admin Shell-Befehl)
 ```
 
 ---
 
 ## 13. Alle Commands (Admin)
 
+**Agent-Commands (Slash-Commands):**
+
 | Command            | Was passiert                              |
 |--------------------|-------------------------------------------|
-| `/briefing`        | Neuen Auftrag geben                       |
-| `/plan`            | Plan anzeigen / genehmigen                |
+| `/briefing`        | Strukturiertes Briefing starten           |
+| `/plan`            | Aufgabenplan erstellen                    |
 | `/fortschritt`     | Wie weit ist die Arbeit?                  |
 | `/katalog`         | Alle Fragen anzeigen                      |
-| `/fragen`          | Offene Fragen beantworten                 |
+| `/fragen`          | Offene Fragen anzeigen                    |
 | `/status`          | Status aller Agenten                      |
 | `/profil`          | Agenten-Profile anzeigen                  |
+| `/weiter`          | Naechsten Schritt ausfuehren              |
+| `/stop-alle`       | ALLE Agenten sofort stoppen               |
 | `/review`          | Ergebnisse pruefen                        |
 | `/changelog`       | Was wurde geaendert?                      |
-| `/stop-alle`       | ALLE Agenten sofort stoppen               |
-| `/weiter`          | Gestoppte Agenten weitermachen lassen     |
 | `/deploy`          | Anwendung veroeffentlichen                |
 | `/ci`              | Build-Pipeline anzeigen                   |
 | `/rollback`        | Letzte Version wiederherstellen           |
 | `/env`             | Umgebungsvariablen verwalten              |
-| `/server`          | Server-Status anzeigen                    |
 | `/health`          | System-Gesundheit pruefen                 |
-| `/backup`          | Sicherung erstellen                       |
-| `/db`              | Datenbanken verwalten                     |
+| `/core-read`       | Core-Memory-Block lesen                   |
+| `/core-update`     | Core-Memory-Block aktualisieren           |
 | `/memory-search`   | Erinnerungen suchen                       |
 | `/memory-store`    | Einen Fakt speichern                      |
+| `/memory-list`     | Alle Erinnerungen auflisten               |
+| `/memory-get`      | Einzelne Erinnerung abrufen               |
 | `/memory-forget`   | Eine Erinnerung loeschen                  |
+| `/conv-search`     | Konversationshistorie durchsuchen         |
+| `/conv-search-date`| Konversationen nach Datum suchen          |
+| `/scan-add`        | URL zur Ueberwachung hinzufuegen          |
+| `/scan-list`       | Alle ueberwachten URLs anzeigen           |
+| `/scan`            | URL sofort scannen                        |
+| `/scan-diff`       | Aenderungen seit letztem Scan zeigen      |
+| `/kb-import`       | Lokale Dateien in KB importieren          |
+| `/scan-config`     | Scanner-Konfiguration anzeigen/aendern    |
+
+**Admin Shell-Befehle (System-Commands, keine Agent-Commands):**
+
+| Befehl             | Was passiert                              |
+|--------------------|-------------------------------------------|
+| `docker compose logs` | Detaillierte Protokolle anzeigen       |
+| `/server`          | Server-Status anzeigen                    |
+| `/backup`          | Sicherung erstellen                       |
+| `/db`              | Datenbanken verwalten                     |
 | `/hooks`           | Automatische Regeln verwalten             |
-| `/logs`            | Protokolle anzeigen                       |
 | `/kosten`          | Kosten-Uebersicht                         |
 | `/update`          | System aktualisieren                      |
 
@@ -476,7 +516,7 @@ Das System nutzt 3 Datenbanken:
 |----------------------------------|----------------------------------|
 | Agenten antworten nicht          | `/status` dann `/stop-alle`      |
 |                                  | dann `/weiter`                   |
-| Agent hat Fehler                 | `/logs` und `/health` pruefen    |
+| Agent hat Fehler                 | `docker compose logs` und `/health` pruefen |
 | Kosten zu hoch                   | `/kosten` -- Haiku spart auto.   |
 | Aenderung rueckgaengig machen   | `/rollback`                      |
 | Datenbank antwortet nicht        | `/db status` und `/health`       |

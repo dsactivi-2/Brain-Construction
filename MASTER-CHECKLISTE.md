@@ -104,6 +104,9 @@ Jeder Punkt muss abgehakt werden bevor das Projekt als fertig gilt.
   - [x] Neo4j (Graph-DB) — Self-Hosted + Managed + Einstellungen erklaert + Verbindung — 2026-02-17 22:54
   - [x] Vektor-DB (Qdrant) — Self-Hosted + Managed + Einstellungen erklaert + Verbindung — 2026-02-17 22:54
   - [x] Redis (Cache) — Self-Hosted + Managed + Einstellungen erklaert + Verbindung — 2026-02-17 22:54
+  - [x] PostgreSQL/SQLite (Recall Memory) — 2026-02-17 22:54
+  - [x] Core Memory Setup — 2026-02-17 22:55
+  - [x] Mem0/Auto-Recall Setup — 2026-02-17 22:55
 - [x] Docker + Docker Compose Setup (Mac/Windows/Linux) — 2026-02-17 22:55
 - [x] MCP-Server Einrichtung (RAG-API, Doc-Scanner, GitHub, Notion) — 2026-02-17 22:55
 - [x] Claude API Einrichtung — 2026-02-17 22:55
@@ -132,7 +135,7 @@ Jeder Punkt muss abgehakt werden bevor das Projekt als fertig gilt.
 - [x] Inhaltsverzeichnis mit Seitennummern — 2026-02-17 04:05
 - [x] Alle Funktionen dokumentiert — 2026-02-17 04:05
 - [x] Alle Einstellungen dokumentiert — 2026-02-17 04:05
-- [x] Funktions- und Endpoint-Registry (IDs: FN-001, EP-001) — 2026-02-17 04:05
+- [x] Funktions- und Endpoint-Registry (FN-001 bis FN-059, EP-001 bis EP-012) — 2026-02-17 04:05
 - [x] Version: Admin — 2026-02-17 04:05
 - [x] Version: Supervisor — 2026-02-17 04:05
 - [x] Version: Worker — 2026-02-17 04:06
@@ -154,3 +157,14 @@ Jeder Punkt muss abgehakt werden bevor das Projekt als fertig gilt.
 - [x] Alles auf Desktop — 2026-02-17 04:20
 - [x] Finaler Push — 2026-02-17 04:21
 - [x] Bereit zum Bauen — 2026-02-17 04:21
+
+## Phase 8: Deep Review + Fixes
+- [ ] Alle Dokumente reviewed
+- [ ] Alle Findings gefixt
+- [ ] Tool-Namen konsistent (alle Dokumente)
+- [ ] DB-Anzahl konsistent (4 ueberall)
+- [ ] Command-Beschreibungen konsistent
+- [ ] Querverweise zwischen Dokumenten
+- [ ] Supervisor-Detail-Manual vervollstaendigt
+- [ ] Worker-Detail-Manual vervollstaendigt
+- [ ] Phase 8 committed

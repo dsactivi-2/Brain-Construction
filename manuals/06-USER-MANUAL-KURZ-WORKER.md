@@ -11,6 +11,8 @@
 Ein KI-Team programmiert fuer dich. Du sagst was du brauchst.
 Das Team plant, baut, testet und liefert. Du beantwortest nur Fragen.
 
+Das System merkt sich alles. Wenn du sagst "mach weiter wie gestern", weiss es was gemeint ist.
+
 ```
   +-------+    Auftrag     +----------+    Code    +----------+
   |  DU   | ------------->  |  KI-TEAM | ---------> | ERGEBNIS |

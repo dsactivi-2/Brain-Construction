@@ -46,6 +46,27 @@ Schritt 12: Dokumentation generieren
 
 ---
 
+## Voraussetzungen
+
+Bevor mit der Installation begonnen wird, muessen folgende Werkzeuge installiert sein:
+
+| Werkzeug | Version | Hinweis |
+|----------|---------|---------|
+| Docker Desktop | aktuell | Fuer alle Container-Dienste |
+| Git Bash ODER WSL2 | — | Alle Befehle sind fuer Unix-Shell geschrieben. Auf Windows muss Git Bash oder WSL2 verwendet werden |
+| Python | 3.10+ | Fuer Gehirn-System, MCP-Server, Skripte |
+| Node.js | 18+ | Fuer MCP-Connectoren und Dokumentation |
+| npm | (mit Node.js) | Paketmanager fuer Node.js |
+| Git | aktuell | Versionskontrolle |
+
+**Hinweis zu Pfaden auf Windows:**
+- `~` steht fuer das Home-Verzeichnis
+- In Git Bash entspricht `~` dem Pfad `/c/Users/NUTZERNAME`
+- In WSL2 entspricht `~` dem Pfad `/home/NUTZERNAME`
+- Alle Befehle in diesem Runbook nutzen Unix-Syntax und muessen in Git Bash oder WSL2 ausgefuehrt werden
+
+---
+
 ## Schritt 1: Infrastruktur
 
 ### 1.1 Neo4j (Graph-Datenbank)
@@ -88,10 +109,10 @@ docker run -d \
   qdrant/qdrant:latest
 
 # Verbindung testen
-curl http://localhost:6333/dashboard
+curl http://localhost:6333/collections
 ```
 
-**Pruefung:** http://localhost:6333/dashboard erreichbar
+**Pruefung:** http://localhost:6333/collections erreichbar (API-Endpunkt, zuverlaessiger als /dashboard)
 **Fehlerbehandlung:** Port belegt → anderen Port mappen: `-p 6335:6333`
 **Rollback:** `docker stop qdrant && docker rm qdrant`
 
@@ -125,9 +146,12 @@ docker exec -it redis redis-cli -a SICHERES_PASSWORT ping
 Neo4j       → Unabhaengig, kann zuerst starten
 Qdrant      → Unabhaengig, kann parallel starten
 Redis       → Unabhaengig, kann parallel starten
+PostgreSQL  → Unabhaengig, kann parallel starten (fuer Recall Memory)
 
-Alle 3 muessen laufen BEVOR Schritt 2 beginnt.
+Alle 4 muessen laufen BEVOR Schritt 2 beginnt.
 ```
+
+> **Siehe auch:** 04-INSTALLATIONS-GUIDE.md fuer die Schritt-fuer-Schritt Installation der Datenbanken.
 
 ---
 
@@ -287,15 +311,12 @@ cat > core_memory/core-memory.json << 'EOF'
 EOF
 ```
 
-**Core-Memory Tools (5 Befehle fuer den Agenten):**
+**Core-Memory Tools (2 Befehle fuer den Agenten):**
 
 | Tool | Beschreibung |
 |------|-------------|
-| `core_memory_append(block, inhalt)` | Fuegt Text an einen Block an |
-| `core_memory_replace(block, alt, neu)` | Ersetzt Text innerhalb eines Blocks |
-| `core_memory_remove(block, inhalt)` | Entfernt Text aus einem Block |
-| `core_memory_read(block)` | Liest einen einzelnen Block |
-| `core_memory_list()` | Zeigt alle Bloecke mit aktuellem Fuellstand |
+| `core_memory_read(block)` | Liest einen einzelnen Block oder alle Bloecke (wenn `block` leer ist) mit aktuellem Fuellstand |
+| `core_memory_update(block, operation, inhalt, alt)` | Aendert einen Block. Operationen: `append` (Text anfuegen), `replace` (Text ersetzen, benoetigt `alt` fuer den zu ersetzenden Text), `remove` (Text entfernen) |
 
 **Injection in System-Prompt:**
 ```bash
@@ -386,11 +407,15 @@ Nutzer-Prompt ──► [UserPromptSubmit Hook]
 | `global` | Permanent fuer alle | "Firmenregel: Keine var, immer const/let" |
 
 **Befehle — Auto-Recall Hook (UserPromptSubmit):**
+
+> **Hinweis:** Claude Code uebergibt Hook-Daten via stdin als JSON, NICHT als Umgebungsvariablen. Das Skript muss stdin lesen und mit `jq` oder `python3` parsen.
+
 ```bash
 cat > ~/.claude/hooks/auto-recall.sh << 'RECALLEOF'
 #!/bin/bash
 # Auto-Recall: Relevante Erinnerungen vor Antwort suchen und injizieren
-PROMPT="$1"
+# Hook-Daten kommen via stdin als JSON
+INPUT=$(cat -)
 BRAIN_DIR="$HOME/claude-agent-team/brain"
 
 python3 << PYEOF
@@ -399,9 +424,16 @@ sys.path.insert(0, "$BRAIN_DIR")
 
 from auto_memory.recall import search_memories
 
+# Hook-Daten aus stdin parsen
+hook_data = json.loads('''$INPUT''')
+prompt = hook_data.get("prompt", "")
+
+if not prompt:
+    sys.exit(0)
+
 # Semantische Suche ueber alle Memory-Scopes
 results = search_memories(
-    query="$PROMPT",
+    query=prompt,
     scopes=["session", "user", "projekt", "global"],
     top_k=10,
     min_score=0.6
@@ -418,11 +450,15 @@ chmod +x ~/.claude/hooks/auto-recall.sh
 ```
 
 **Befehle — Auto-Capture Hook (Stop):**
+
+> **Hinweis:** Claude Code uebergibt Hook-Daten via stdin als JSON, NICHT als Umgebungsvariablen. Das Skript muss stdin lesen und mit `jq` oder `python3` parsen.
+
 ```bash
 cat > ~/.claude/hooks/auto-capture.sh << 'CAPTUREEOF'
 #!/bin/bash
 # Auto-Capture: Neue Fakten/Entscheidungen nach Antwort extrahieren und speichern
-CONVERSATION="$1"
+# Hook-Daten kommen via stdin als JSON
+INPUT=$(cat -)
 BRAIN_DIR="$HOME/claude-agent-team/brain"
 
 python3 << PYEOF
@@ -431,9 +467,16 @@ sys.path.insert(0, "$BRAIN_DIR")
 
 from auto_memory.capture import extract_and_store
 
+# Hook-Daten aus stdin parsen
+hook_data = json.loads('''$INPUT''')
+conversation = hook_data.get("conversation", "")
+
+if not conversation:
+    sys.exit(0)
+
 # Extrahiere neue Erinnerungen aus der Konversation
 new_memories = extract_and_store(
-    conversation="$CONVERSATION",
+    conversation=conversation,
     extract_types=["fakt", "entscheidung", "praeferenz", "fehler", "todo"],
     dedup=True  # Keine Duplikate speichern
 )
@@ -447,20 +490,23 @@ chmod +x ~/.claude/hooks/auto-capture.sh
 ```
 
 **settings.json Erweiterung — Hooks fuer Auto-Recall/Capture:**
+
+> **Hinweis:** Hook-Daten werden von Claude Code automatisch via stdin als JSON uebergeben. Die Befehle brauchen KEINE Argumente wie `$PROMPT` oder `$CONVERSATION` — diese Umgebungsvariablen existieren nicht.
+
 ```json
 {
   "hooks": {
     "UserPromptSubmit": [
       {
         "type": "command",
-        "command": "bash ~/.claude/hooks/auto-recall.sh \"$PROMPT\"",
+        "command": "bash ~/.claude/hooks/auto-recall.sh",
         "timeout": 8000
       }
     ],
     "Stop": [
       {
         "type": "command",
-        "command": "bash ~/.claude/hooks/auto-capture.sh \"$CONVERSATION\"",
+        "command": "bash ~/.claude/hooks/auto-capture.sh",
         "timeout": 10000
       }
     ]
@@ -474,10 +520,10 @@ chmod +x ~/.claude/hooks/auto-capture.sh
 
 | Tool | Beschreibung |
 |------|-------------|
-| `memory_add(text, scope, type)` | Erinnerung manuell hinzufuegen |
+| `memory_store(text, scope, type)` | Erinnerung manuell speichern |
 | `memory_search(query, scope, top_k)` | Erinnerungen semantisch suchen |
-| `memory_delete(memory_id)` | Einzelne Erinnerung loeschen |
-| `memory_update(memory_id, new_text)` | Erinnerung aktualisieren |
+| `memory_forget(memory_id)` | Einzelne Erinnerung loeschen |
+| `memory_get(memory_id)` | Einzelne Erinnerung abrufen |
 | `memory_list(scope, type, limit)` | Erinnerungen auflisten/filtern |
 
 **Auto-Memory Modul erstellen:**
@@ -541,7 +587,7 @@ Session endet ──► [SessionEnd Hook]
                          │
               ┌──────────┴──────────┐
               ▼                     ▼
-     Qdrant (Vektoren)      SQLite/Redis
+     Qdrant (Vektoren)      PostgreSQL/SQLite
      fuer semantische       (Metadaten:
       Suche                  Datum, Agent,
                              Session-ID)
@@ -594,10 +640,15 @@ python3 recall_memory/init_db.py
 ```
 
 **SessionEnd Hook — Konversation speichern:**
+
+> **Hinweis:** Claude Code uebergibt Hook-Daten via stdin als JSON, NICHT als Umgebungsvariablen. `CLAUDE_CONVERSATION`, `CLAUDE_SESSION_ID` und `CLAUDE_AGENT_NAME` existieren nicht als Umgebungsvariablen. Das Skript muss stdin lesen und die JSON-Daten parsen.
+
 ```bash
 cat > ~/.claude/hooks/session-end-recall.sh << 'RECALLENDEOF'
 #!/bin/bash
 # Recall Memory: Komplette Konversation bei Session-Ende speichern
+# Hook-Daten kommen via stdin als JSON
+INPUT=$(cat -)
 BRAIN_DIR="$HOME/claude-agent-team/brain"
 
 python3 << PYEOF
@@ -605,9 +656,12 @@ import json, sqlite3, uuid, os
 from datetime import datetime
 
 DB_PATH = os.path.join("$BRAIN_DIR", "recall_memory", "conversations.db")
-CONV_DATA = os.environ.get("CLAUDE_CONVERSATION", "")
-SESSION_ID = os.environ.get("CLAUDE_SESSION_ID", "unknown")
-AGENT_NAME = os.environ.get("CLAUDE_AGENT_NAME", "unknown")
+
+# Hook-Daten aus stdin parsen
+hook_data = json.loads('''$INPUT''')
+CONV_DATA = hook_data.get("conversation", "")
+SESSION_ID = hook_data.get("session_id", "unknown")
+AGENT_NAME = hook_data.get("agent_name", "unknown")
 
 if CONV_DATA:
     conn = sqlite3.connect(DB_PATH)
@@ -732,14 +786,16 @@ ls -la ~/.claude/hooks/session-end-recall.sh
 **Fehlerbehandlung:** DB-Fehler → `rm recall_memory/conversations.db && python3 recall_memory/init_db.py`
 **Rollback:** `rm -rf ~/claude-agent-team/brain/recall_memory && rm ~/.claude/hooks/session-end-recall.sh`
 
-### 2.7 Zusammenspiel der 3 neuen Gehirn-Schichten
+### 2.7 Zusammenspiel der 3 neuen Gehirn-Schichten (S1, S2, S6)
+
+> **Hinweis zur Nummerierung:** Die Schichten sind Teil der globalen Schichten-Architektur. Hier werden die 3 NEUEN Schichten beschrieben: Schicht 1 (S1), Schicht 2 (S2) und Schicht 6 (S6). Die Schichten 3-5 sind in der Gesamt-Architektur definiert (siehe 01-PROJEKTPLANUNG.md).
 
 ```
 ┌─────────────────────────────────────────────────────────────┐
 │                    GEHIRN-SYSTEM v2                         │
 │                                                             │
 │  ┌───────────────────────────────────────────────────────┐  │
-│  │ Schicht 1: CORE MEMORY (Schritt 2.4)                 │  │
+│  │ Schicht 1 (S1): CORE MEMORY (Schritt 2.4)            │  │
 │  │ → Immer im Kontext, sofort verfuegbar                │  │
 │  │ → 5 Bloecke, max 20k Zeichen                        │  │
 │  │ → Injection via SessionStart Hook                     │  │
@@ -747,7 +803,7 @@ ls -la ~/.claude/hooks/session-end-recall.sh
 │                         ▲ liest                             │
 │                         │                                   │
 │  ┌───────────────────────────────────────────────────────┐  │
-│  │ Schicht 2: AUTO-RECALL/CAPTURE (Schritt 2.5)         │  │
+│  │ Schicht 2 (S2): AUTO-RECALL/CAPTURE (Schritt 2.5)    │  │
 │  │ → Automatisch bei jedem Prompt (Recall)              │  │
 │  │ → Automatisch nach jeder Antwort (Capture)           │  │
 │  │ → Kurzzeit + Langzeit Scopes                         │  │
@@ -756,7 +812,7 @@ ls -la ~/.claude/hooks/session-end-recall.sh
 │                         ▲ durchsucht                        │
 │                         │                                   │
 │  ┌───────────────────────────────────────────────────────┐  │
-│  │ Schicht 3: RECALL MEMORY (Schritt 2.6)               │  │
+│  │ Schicht 6 (S6): RECALL MEMORY (Schritt 2.6)          │  │
 │  │ → Komplette Konversationen archiviert                │  │
 │  │ → Durchsuchbar nach Inhalt + Datum                   │  │
 │  │ → SessionEnd Hook speichert automatisch              │  │
@@ -777,6 +833,8 @@ ls -la ~/.claude/hooks/session-end-recall.sh
 4. Dann Recall Memory (Schritt 2.6) — braucht SQLite + Qdrant
 
 **Alle 3 Schichten muessen konfiguriert sein BEVOR Schritt 3 (MCP-Server) beginnt.**
+
+> **Siehe auch:** 01-PROJEKTPLANUNG.md Abschnitt Gehirn-System fuer die vollstaendige Schichten-Architektur. 03-SETUP-ANLEITUNG.md fuer detaillierte Konfigurationseinstellungen.
 
 ---
 
@@ -802,12 +860,12 @@ cat > mcp-servers/rag-api/server.py << 'EOF'
 EOF
 
 # Server starten
-# uvicorn mcp-servers.rag-api.server:app --host 0.0.0.0 --port 8100
+# uvicorn mcp_servers.rag_api.server:app --host 0.0.0.0 --port 8100
 ```
 
 **Pruefung:** `curl http://localhost:8100/health`
 **Fehlerbehandlung:** Port belegt → anderen Port waehlen
-**Rollback:** Prozess beenden: `kill $(lsof -t -i:8100)`
+**Rollback:** Prozess beenden: `kill $(lsof -t -i:8100)` (Linux/Mac) oder in PowerShell: `netstat -aon | findstr :8100` und dann `taskkill /PID <PID> /F`
 
 ### 3.2 Doc-Scanner MCP-Server
 
@@ -817,7 +875,7 @@ EOF
 ```bash
 mkdir -p mcp-servers/doc-scanner
 
-pip install beautifulsoup4 playwright aiohttp difflib
+pip install beautifulsoup4 playwright aiohttp
 
 # Playwright Browser installieren (fuer JS-Seiten)
 playwright install chromium
@@ -853,6 +911,8 @@ claude mcp add notion -- npx @modelcontextprotocol/server-notion
 **Pruefung:** `claude mcp list` → GitHub und Notion sichtbar
 **Fehlerbehandlung:** API-Keys pruefen (GITHUB_TOKEN, NOTION_TOKEN)
 
+> **Siehe auch:** 03-SETUP-ANLEITUNG.md fuer detaillierte MCP-Server-Konfiguration und API-Key-Einrichtung.
+
 ---
 
 ## Schritt 4: Hook-System
@@ -873,17 +933,20 @@ chmod +x ~/.claude/hooks/*.sh
 ### 4.2 settings.json konfigurieren
 
 ```bash
-# settings.json mit allen 17 Hooks schreiben
+# settings.json mit ALLEN Hooks schreiben (einschliesslich Gehirn-System-Hooks)
+# WICHTIG: Diese Datei enthaelt ALLE Hook-Konfigurationen. Nicht einzeln ueberschreiben!
 cat > ~/.claude/settings.json << 'SETTINGSEOF'
 {
   "hooks": {
     "SessionStart": [
       {"matcher": "startup", "type": "command", "command": "bash ~/.claude/hooks/session-start-startup.sh", "timeout": 15000},
       {"matcher": "compact", "type": "command", "command": "bash ~/.claude/hooks/session-start-compact.sh", "timeout": 10000},
-      {"matcher": "resume", "type": "command", "command": "bash ~/.claude/hooks/session-start-resume.sh", "timeout": 15000}
+      {"matcher": "resume", "type": "command", "command": "bash ~/.claude/hooks/session-start-resume.sh", "timeout": 15000},
+      {"type": "command", "command": "bash ~/.claude/hooks/core-memory-inject.sh", "timeout": 10000}
     ],
     "UserPromptSubmit": [
-      {"type": "command", "command": "bash ~/.claude/hooks/user-prompt-submit.sh", "timeout": 5000}
+      {"type": "command", "command": "bash ~/.claude/hooks/user-prompt-submit.sh", "timeout": 5000},
+      {"type": "command", "command": "bash ~/.claude/hooks/auto-recall.sh", "timeout": 8000}
     ],
     "PreToolUse": [
       {"matcher": "Write|Edit", "type": "agent", "prompt": "Pruefe ob dieser Code-Aenderung sicher ist. Keine Secrets, keine Injection, keine gefaehrlichen Patterns.", "timeout": 30000},
@@ -900,7 +963,8 @@ cat > ~/.claude/settings.json << 'SETTINGSEOF'
       {"type": "command", "command": "bash ~/.claude/hooks/pre-compact.sh", "timeout": 15000}
     ],
     "Stop": [
-      {"type": "agent", "prompt": "Pruefe ob alle zugewiesenen Tasks erledigt sind. Kein Task darf uebersprungen oder als erledigt markiert sein ohne tatsaechlich erledigt zu sein.", "timeout": 60000}
+      {"type": "agent", "prompt": "Pruefe ob alle zugewiesenen Tasks erledigt sind. Kein Task darf uebersprungen oder als erledigt markiert sein ohne tatsaechlich erledigt zu sein.", "timeout": 60000},
+      {"type": "command", "command": "bash ~/.claude/hooks/auto-capture.sh", "timeout": 10000}
     ],
     "SubagentStart": [
       {"type": "command", "command": "bash ~/.claude/hooks/subagent-start.sh", "timeout": 10000}
@@ -918,7 +982,8 @@ cat > ~/.claude/settings.json << 'SETTINGSEOF'
       {"type": "agent", "prompt": "Verifiziere dass dieser Task WIRKLICH erledigt ist. Pruefe: Code geschrieben? Tests bestanden? Review OK? Nichts uebersprungen?", "timeout": 60000}
     ],
     "SessionEnd": [
-      {"type": "command", "command": "bash ~/.claude/hooks/session-end.sh", "timeout": 15000}
+      {"type": "command", "command": "bash ~/.claude/hooks/session-end.sh", "timeout": 15000},
+      {"type": "command", "command": "bash ~/.claude/hooks/session-end-recall.sh", "timeout": 20000}
     ]
   }
 }
@@ -928,6 +993,8 @@ SETTINGSEOF
 **Pruefung:** `cat ~/.claude/settings.json | python3 -m json.tool` → Valides JSON
 **Fehlerbehandlung:** JSON-Syntax-Fehler → online JSON Validator nutzen
 **Rollback:** Backup wiederherstellen (install.sh erstellt automatisch Backups)
+
+> **Siehe auch:** 01-PROJEKTPLANUNG.md Abschnitt Hook-System fuer die vollstaendige Hook-Beschreibung. 03-SETUP-ANLEITUNG.md fuer Debugging-Tipps.
 
 ---
 
@@ -965,6 +1032,8 @@ done
 **Fehlerbehandlung:** Fehlende Datei → manuell erstellen
 **Rollback:** `rm ~/.claude/agents/*.md`
 
+> **Siehe auch:** 01-PROJEKTPLANUNG.md Abschnitt Agenten-Rollen fuer die detaillierten Rollenbeschreibungen.
+
 ---
 
 ## Schritt 6: Kommunikation
@@ -976,6 +1045,7 @@ done
 # 2. Incoming Webhook aktivieren
 # 3. Webhook URL speichern
 
+mkdir -p ~/.claude/config
 cat > ~/.claude/config/communication.json << 'EOF'
 {
   "slack": {
@@ -1024,6 +1094,8 @@ curl -X POST -H 'Content-type: application/json' \
   DEINE_SLACK_WEBHOOK_URL
 ```
 
+> **Siehe auch:** 03-SETUP-ANLEITUNG.md fuer detaillierte Webhook-Konfiguration und Benachrichtigungs-Einstellungen.
+
 ---
 
 ## Schritt 7: Fragenkatalog-System
@@ -1042,6 +1114,8 @@ EOF
 
 **Gespeichert in:** Redis (fuer schnellen Zugriff) + HippoRAG 2 (fuer Langzeit)
 **Abhaengigkeit:** Redis (Schritt 1.3) + Notification Hook (Schritt 4)
+
+> **Siehe auch:** 01-PROJEKTPLANUNG.md Abschnitt Fragenkatalog fuer die vollstaendige Spezifikation.
 
 ---
 
@@ -1066,11 +1140,16 @@ EOF
 # Cron-Job einrichten (Linux/Mac)
 (crontab -l 2>/dev/null; echo "0 3 * * 0 cd ~/claude-agent-team && python3 mcp-servers/doc-scanner/scan.py") | crontab -
 
-# Fuer Windows: Task Scheduler nutzen
+# Fuer Windows: Task Scheduler (schtasks) nutzen
+# schtasks /create /tn "ClaudeAgentScan" /tr "python3 %USERPROFILE%\claude-agent-team\mcp-servers\doc-scanner\scan.py" /sc weekly /d SUN /st 03:00
 ```
 
 **Pruefung:** `python3 mcp-servers/doc-scanner/scan.py --test`
 **Abhaengigkeit:** RAG-API (Schritt 3.1) + HippoRAG 2 (Schritt 2.1)
+
+> **Hinweis:** Das Skript `scan.py` wird in der Bau-Phase erstellt. Hier wird nur die Konfiguration vorbereitet.
+
+> **Siehe auch:** 03-SETUP-ANLEITUNG.md fuer URL-Listen-Konfiguration und Scan-Intervalle.
 
 ---
 
@@ -1080,6 +1159,7 @@ EOF
 cd ~/claude-agent-team
 
 # Sync-Repo initialisieren
+# Hinweis: sync-setup.sh wird in der Bau-Phase erstellt
 bash scripts/sync-setup.sh init
 
 # Remote hinzufuegen
@@ -1091,6 +1171,10 @@ git push -u origin main
 **Pruefung:** `bash scripts/sync-setup.sh --status`
 **Abhaengigkeit:** GitHub-Repo muss existieren
 
+> **Hinweis:** Das Skript `sync-setup.sh` wird in der Bau-Phase erstellt. Hier wird nur der Ablauf dokumentiert.
+
+> **Siehe auch:** 03-SETUP-ANLEITUNG.md fuer Sync-Konfiguration und Konfliktloesung.
+
 ---
 
 ## Schritt 10: Cloud-Deployment
@@ -1101,11 +1185,10 @@ git push -u origin main
 cd ~/claude-agent-team
 
 cat > docker-compose.yml << 'EOF'
-version: '3.8'
-
 services:
   neo4j:
     image: neo4j:5-community
+    container_name: neo4j
     restart: always
     ports:
       - "7474:7474"
@@ -1119,14 +1202,17 @@ services:
 
   qdrant:
     image: qdrant/qdrant:latest
+    container_name: qdrant
     restart: always
     ports:
       - "6333:6333"
+      - "6334:6334"
     volumes:
       - qdrant-data:/qdrant/storage
 
   redis:
     image: redis:7-alpine
+    container_name: redis
     restart: always
     ports:
       - "6379:6379"
@@ -1134,8 +1220,22 @@ services:
     volumes:
       - redis-data:/data
 
+  recall-db:
+    image: postgres:16-alpine
+    container_name: recall-db
+    restart: always
+    environment:
+      POSTGRES_DB: recall_memory
+      POSTGRES_USER: recall_user
+      POSTGRES_PASSWORD: ${RECALL_DB_PASSWORD}
+    ports:
+      - "5432:5432"
+    volumes:
+      - recall-data:/var/lib/postgresql/data
+
   rag-api:
     build: ./mcp-servers/rag-api
+    container_name: rag-api
     restart: always
     ports:
       - "8100:8100"
@@ -1143,14 +1243,17 @@ services:
       - neo4j
       - qdrant
       - redis
+      - recall-db
     environment:
       NEO4J_URI: bolt://neo4j:7687
       NEO4J_PASSWORD: ${NEO4J_PASSWORD}
       QDRANT_URL: http://qdrant:6333
       REDIS_URL: redis://:${REDIS_PASSWORD}@redis:6379/0
+      RECALL_DB_URL: postgresql://recall_user:${RECALL_DB_PASSWORD}@recall-db:5432/recall_memory
 
   doc-scanner:
     build: ./mcp-servers/doc-scanner
+    container_name: doc-scanner
     restart: always
     ports:
       - "8101:8101"
@@ -1159,20 +1262,37 @@ services:
     environment:
       RAG_API_URL: http://rag-api:8100
 
+  # --- Optionale Services ---
+  # Ollama (lokales LLM, z.B. fuer Embedding oder Extraktion)
+  # Auskommentieren und anpassen falls benoetigt:
+  # ollama:
+  #   image: ollama/ollama:latest
+  #   container_name: ollama
+  #   restart: always
+  #   ports:
+  #     - "11434:11434"
+  #   volumes:
+  #     - ollama-data:/root/.ollama
+
 volumes:
   neo4j-data:
   neo4j-logs:
   qdrant-data:
   redis-data:
+  recall-data:
+  # ollama-data:
 EOF
 
 # .env Datei erstellen
 cat > .env << 'EOF'
-NEO4J_PASSWORD=SICHERES_PASSWORT_HIER
-REDIS_PASSWORD=SICHERES_PASSWORT_HIER
+NEO4J_PASSWORD=SICHERES_PASSWORT
+REDIS_PASSWORD=SICHERES_PASSWORT
+RECALL_DB_PASSWORD=SICHERES_PASSWORT
 CLAUDE_API_KEY=DEIN_API_KEY
 EOF
 ```
+
+> **Hinweis:** Die Dockerfiles fuer `rag-api` und `doc-scanner` (unter `./mcp-servers/rag-api/Dockerfile` und `./mcp-servers/doc-scanner/Dockerfile`) werden in der Bau-Phase erstellt. Ohne diese Dateien schlaegt `docker compose build` fehl.
 
 ### 10.2 Deployment
 
@@ -1191,6 +1311,8 @@ docker compose logs -f
 **Fehlerbehandlung:** `docker compose logs SERVICE_NAME` fuer Fehlerdetails
 **Rollback:** `docker compose down` (Daten bleiben in Volumes)
 
+> **Siehe auch:** 04-INSTALLATIONS-GUIDE.md fuer die vollstaendige Docker-Deployment-Anleitung.
+
 ---
 
 ## Schritt 11: Tests + Health-Check
@@ -1201,17 +1323,26 @@ cat > scripts/health-check.sh << 'HEALTHEOF'
 #!/bin/bash
 echo "=== Cloud Code Team Health-Check ==="
 
+# .env laden fuer Passwoerter
+if [ -f "$HOME/claude-agent-team/.env" ]; then
+  source "$HOME/claude-agent-team/.env"
+fi
+
 # Neo4j
 echo -n "Neo4j: "
 curl -s http://localhost:7474 > /dev/null && echo "OK" || echo "FEHLER"
 
 # Qdrant
 echo -n "Qdrant: "
-curl -s http://localhost:6333/dashboard > /dev/null && echo "OK" || echo "FEHLER"
+curl -s http://localhost:6333/collections > /dev/null && echo "OK" || echo "FEHLER"
 
 # Redis
 echo -n "Redis: "
-docker exec redis redis-cli -a $REDIS_PASSWORD ping 2>/dev/null | grep -q PONG && echo "OK" || echo "FEHLER"
+docker exec redis redis-cli -a "$REDIS_PASSWORD" ping 2>/dev/null | grep -q PONG && echo "OK" || echo "FEHLER"
+
+# PostgreSQL (Recall-DB)
+echo -n "Recall-DB: "
+docker exec recall-db pg_isready -U recall_user -d recall_memory > /dev/null 2>&1 && echo "OK" || echo "FEHLER"
 
 # RAG-API
 echo -n "RAG-API: "
@@ -1231,11 +1362,19 @@ bash scripts/health-check.sh
 **Erwartung:** Alle Services zeigen "OK"
 **Fehlerbehandlung:** Fehlender Service → Container pruefen → neustarten
 
+> **Siehe auch:** 03-SETUP-ANLEITUNG.md fuer erweiterte Health-Check-Konfiguration und Monitoring.
+
 ---
 
 ## Schritt 12: Dokumentation generieren
 
+> **Hinweis:** Die Node.js-Abhaengigkeiten (`package.json`, `tsconfig.json` etc.) werden in der Bau-Phase erstellt. Vor Ausfuehrung der folgenden Befehle muss `npm install` im Projektverzeichnis ausgefuehrt worden sein.
+
 ```bash
+# Node.js-Abhaengigkeiten installieren (falls noch nicht geschehen)
+cd ~/claude-agent-team
+npm install
+
 # TypeDoc fuer TypeScript
 npx typedoc --entryPoints src --out docs/api
 
@@ -1249,6 +1388,8 @@ npx changeset version
 npx storybook build -o docs/storybook
 ```
 
+> **Siehe auch:** 03-SETUP-ANLEITUNG.md fuer Dokumentations-Standards und Vorlagen.
+
 ---
 
 ## Fehlerbehandlung: Allgemein
@@ -1256,7 +1397,7 @@ npx storybook build -o docs/storybook
 | Problem | Loesung |
 |---------|---------|
 | Container startet nicht | `docker logs CONTAINER_NAME` pruefen |
-| Port belegt | `lsof -i :PORT` → Prozess beenden oder anderen Port waehlen |
+| Port belegt | `lsof -i :PORT` (Linux/Mac) oder `netstat -aon | findstr :PORT` (PowerShell/Windows) → Prozess beenden oder anderen Port waehlen |
 | DB-Verbindung fehlschlaegt | Passwort + Host pruefen, Container laeuft? |
 | MCP-Server nicht erreichbar | Firewall pruefen, Port offen? |
 | Hook-Skript schlaegt fehl | `chmod +x` pruefen, `bash -x skript.sh` fuer Debug-Output |
@@ -1270,7 +1411,8 @@ Stufe 1: Service neustarten
   docker compose restart SERVICE_NAME
 
 Stufe 2: Container neu erstellen
-  docker compose down SERVICE_NAME && docker compose up -d SERVICE_NAME
+  docker compose stop SERVICE_NAME && docker compose rm -f SERVICE_NAME
+  docker compose up -d SERVICE_NAME
 
 Stufe 3: Daten zuruecksetzen (VORSICHT)
   docker compose down -v  ← Loescht alle Volumes!

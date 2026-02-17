@@ -52,15 +52,15 @@ Ein autonomes Multi-Agent-System fuer Claude Code das:
                     ▼                   ▼
 ┌──────────────────────┐  ┌──────────────────────────────────────┐
 │   17 HOOKS           │  │   GEHIRN-SYSTEM (6 Schichten)        │
-│   (0 Tokens,         │  │                                      │
-│    laufen immer)     │  │   S1: Core Memory (immer im Kontext) │
+│   (laufen immer,     │  │                                      │
+│    automatisch)      │  │   S1: Core Memory (immer im Kontext) │
 │                      │  │   S2: Auto-Recall + Auto-Capture     │
 │   Sicherheit         │  │   S3: HippoRAG 2 (Gedaechtnis)      │
 │   Komprimierung      │  │   S4: Agentic RAG (Suchsteuerung)   │
 │   Profil-Reload      │  │   S5: Agentic Learning Graphs        │
 │   Regeln erzwingen   │  │   S6: Recall Memory (rohe Historie)  │
 │   Benachrichtigungen │  │                                      │
-│   Quality-Gates      │  │   Neo4j + Vektor-DB + Redis + SQLite │
+│   Quality-Gates      │  │   Neo4j + Qdrant + Redis + PostgreSQL/SQLite │
 │                      │  │   Shared ueber alle Agenten/Rechner  │
 └──────────────────────┘  └──────────────────────────────────────┘
                                        │
@@ -331,7 +331,7 @@ Ein autonomes Multi-Agent-System fuer Claude Code das:
 #### Technische Komponenten
 | Komponente | Zweck |
 |-----------|-------|
-| Cheerio / Puppeteer | Webseiten rendern + scrapen (auch JS-Seiten) |
+| Browser-Automatisierung + HTML-Parser | Webseiten rendern + scrapen (auch JS-Seiten) |
 | Diff-Engine | Aenderungserkennung |
 | Chunking-Pipeline | Docs in optimale Stuecke zerlegen |
 | Entity-Extraktor | Endpoints, Parameter, Funktionen rausziehen |
@@ -373,7 +373,7 @@ Ein autonomes Multi-Agent-System fuer Claude Code das:
 **Modell-Default:** Haiku (Tool-generiert), Sonnet (Verfeinerung)
 **Rolle:** Automatische Doku via Tools, Agent verfeinert wenn noetig
 
-#### Automatisch (via Hook, 0 Tokens)
+#### Automatisch (via Hook)
 | Tool | Was |
 |------|-----|
 | TypeDoc / JSDoc | Code-Docs aus Kommentaren |
@@ -408,7 +408,7 @@ Ein autonomes Multi-Agent-System fuer Claude Code das:
 
 ## 4. Hooks (17 Stueck)
 
-Alle Hooks laufen automatisch, ausserhalb von Claudes Kontext, verbrauchen 0 Tokens.
+Alle Hooks laufen automatisch. Command-type Hooks laufen ausserhalb von Claudes Kontext und verbrauchen 0 Tokens. Agent-type Hooks injizieren einen Prompt in den Kontext und verbrauchen daher Tokens.
 
 | Nr. | Hook | Matcher | Typ | Was | Kann blockieren? |
 |-----|------|---------|-----|-----|:----------------:|
@@ -479,7 +479,7 @@ Alle Hooks laufen automatisch, ausserhalb von Claudes Kontext, verbrauchen 0 Tok
 
 Datenbanken:
 ├── Neo4j            → Wissensgraph (Entitaeten + Beziehungen)
-├── Qdrant/ChromaDB  → Vektor-Embeddings (semantische Suche)
+├── Qdrant           → Vektor-Embeddings (semantische Suche)
 ├── Redis            → Cache + Queue (Geschwindigkeit)
 ├── PostgreSQL/SQLite→ Recall Memory (rohe Konversationshistorie)
 └── core-memory.json → Core Memory (immer geladen)
@@ -530,6 +530,21 @@ Shared: Alle Agenten, alle Rechner, alle Sessions
 - Gespeichert in: PostgreSQL oder SQLite
 
 ### Agent-Tools fuer das Gehirn-System
+
+#### Funktions-IDs (FN-051 bis FN-059)
+
+| FN-ID  | Tool                       | Beschreibung                          |
+|--------|----------------------------|---------------------------------------|
+| FN-051 | `core_memory_read`         | Core Memory lesen                     |
+| FN-052 | `core_memory_update`       | Core Memory aktualisieren             |
+| FN-053 | `memory_search`            | Erinnerungen durchsuchen              |
+| FN-054 | `memory_store`             | Erinnerung speichern                  |
+| FN-055 | `memory_list`              | Erinnerungen auflisten                |
+| FN-056 | `memory_get`               | Einzelne Erinnerung abrufen           |
+| FN-057 | `memory_forget`            | Erinnerung loeschen                   |
+| FN-058 | `conversation_search`      | Konversationen durchsuchen            |
+| FN-059 | `conversation_search_date` | Konversationen nach Datum suchen      |
+
 ```
 Core Memory (Schicht 1):
 ├── core_memory_read     → Core Memory lesen
@@ -687,7 +702,7 @@ URL-Liste (Cloud-gehostet):
 
 Zyklus:
   Cron alle 7 Tage (konfigurierbar)
-    → Puppeteer rendert Seiten
+    → Browser-Automatisierung rendert Seiten
     → Diff-Engine vergleicht mit letztem Stand
     → Aenderungen → Chunking → Entity-Extraktion
     → Import in HippoRAG 2
@@ -782,3 +797,13 @@ MELDUNG:
 | DB-Zugriff | Ueber Cloud-DB oder lokal | Direkt auf Server |
 | Vorteil | Schnell, kein Server noetig | Immer verfuegbar |
 | Setup | Claude Code installiert | Docker + Server |
+
+---
+
+## Verwandte Dokumente
+
+- 02-RUNBOOK.md — Bau-Reihenfolge und technische Befehle
+- 03-SETUP-ANLEITUNG.md — Detaillierte Einrichtung aller Komponenten
+- 04-INSTALLATIONS-GUIDE.md — Schritt-fuer-Schritt Installation (Terminal + Cloud)
+- 05-USER-MANUAL-DETAIL-ADMIN.md — Vollstaendiges Benutzerhandbuch (Admin)
+- 06-USER-MANUAL-KURZ-ADMIN.md — Kurzanleitung (Admin)

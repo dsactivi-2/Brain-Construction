@@ -19,7 +19,9 @@ Was DU (der Nutzer) einrichten und konfigurieren musst.
 | Server | Aufgabe | RAM | Kosten/Monat |
 |--------|---------|-----|:------------:|
 | **Agent-Server** | Agenten + MCP + Docker | 8 GB | ~20-30€ |
-| **DB-Server** | Neo4j + Qdrant + Redis | 16 GB | ~30-40€ |
+| **DB-Server** | Neo4j + Qdrant + Redis + PostgreSQL | 16-20 GB | ~30-50€ |
+
+> **Hinweis:** PostgreSQL fuer Recall Memory benoetigt minimal ~256 MB RAM zusaetzlich. Bei 16 GB RAM reicht das fuer die meisten Setups. Erst bei vielen parallelen Projekten oder grosser Konversationshistorie empfehlen sich 20 GB.
 
 ### Variante C: Managed Services (sparsamste)
 
@@ -222,7 +224,13 @@ redis:
 
 ### 2.4 Alle Datenbanken verbinden
 
-Erstelle eine zentrale Config-Datei:
+Erstelle zuerst den Config-Ordner (falls noch nicht vorhanden):
+
+```bash
+mkdir -p ~/.claude/config
+```
+
+Dann die zentrale Config-Datei:
 
 ```bash
 cat > ~/.claude/config/databases.yaml << 'EOF'
@@ -242,11 +250,25 @@ qdrant:
 redis:
   url: redis://:DEIN_REDIS_PASSWORT@localhost:6379/0
 
+recall_memory:
+  type: postgresql                     # oder sqlite
+  host: localhost
+  port: 5432
+  database: recall_memory
+  user: recall_user
+  password: SICHERES_PASSWORT
+
 embedding:
   model: all-MiniLM-L6-v2             # lokal, gratis, schnell
   # alternativ: text-embedding-3-small # OpenAI, besser aber kostet
 EOF
 ```
+
+> **Hinweis zu Embedding-Modellen:** Dieses Projekt nutzt zwei verschiedene Embedding-Pipelines fuer zwei verschiedene Collections:
+> - **`all-MiniLM-L6-v2`** (384 Dimensionen) — fuer HippoRAG (Qdrant-Collection `hipporag_embeddings`)
+> - **`nomic-embed-text`** (768 Dimensionen) — fuer Mem0 Self-Hosted (Qdrant-Collection `mem0_memories`)
+>
+> Beide Modelle laufen parallel. Die unterschiedlichen Dimensionen sind kein Problem, da jede Collection ihre eigene Konfiguration hat.
 
 ---
 
@@ -565,13 +587,13 @@ docker compose version  # Docker Compose 2+ erwartet
 
 ```bash
 # In Claude Code:
-claude mcp add rag-api -- python3 ~/claude-agent-team/mcp-servers/rag-api/server.py
+claude mcp add rag-api -- python3 ~/Desktop/claude-agent-team/mcp-servers/rag-api/server.py
 ```
 
 ### 4.2 Doc-Scanner Server registrieren
 
 ```bash
-claude mcp add doc-scanner -- python3 ~/claude-agent-team/mcp-servers/doc-scanner/server.py
+claude mcp add doc-scanner -- python3 ~/Desktop/claude-agent-team/mcp-servers/doc-scanner/server.py
 ```
 
 ### 4.3 GitHub Connector
@@ -761,6 +783,13 @@ docs.deinedomain.com {
 }
 ```
 
+> **Wichtig — Docker-Netzwerk:** Damit Caddy die Servicenamen `rag-api` und `doc-scanner` aufloesen kann, muessen alle Container im **selben Docker-Netzwerk** sein. Bei `docker compose` ist das automatisch der Fall. Bei einzelnen `docker run`-Befehlen musst du ein gemeinsames Netzwerk erstellen:
+> ```bash
+> docker network create agent-net
+> # Dann jeden Container mit --network agent-net starten
+> ```
+> **Alternative:** Verwende `localhost:8100` und `localhost:8101` statt Servicenamen, wenn alle Container auf demselben Host laufen und Ports gemappt sind.
+
 ---
 
 ## 9. Empfehlungen: Welcher Anbieter fuer was
@@ -775,6 +804,8 @@ docs.deinedomain.com {
 | **Vektor-DB Managed** | Qdrant Cloud Free | Gratis zum Starten |
 | **Redis** | Self-Hosted | Gratis, minimal RAM |
 | **Redis Managed** | Redis Cloud Free | Gratis, 30 MB reicht fuer Cache |
+| **PostgreSQL** | Self-Hosted (Docker) | Standard fuer Recall Memory |
+| **PostgreSQL Managed** | Supabase Free (500 MB) oder Neon Free (512 MB) | Gratis zum Starten |
 | **Domain** | Cloudflare | Guenstig, schnell, kostenlose SSL |
 | **Monitoring** | Uptime Kuma (Self-Hosted) | Gratis, einfach, Docker |
 
@@ -803,18 +834,29 @@ Das vollstaendige Gehirn-System besteht aus 6 Schichten:
 |---|-----|-----|------|
 | 1 | Server mieten oder Docker lokal | Hetzner/lokal | Vor allem anderen |
 | 2 | Docker installieren | Server/lokal | Vor Datenbanken |
-| 3 | Neo4j Passwort waehlen | .env Datei | Vor DB-Start |
-| 4 | Redis Passwort waehlen | .env Datei | Vor DB-Start |
-| 5 | Core Memory erstellen | ~/.claude/core-memory.json | Vor Agent-Start |
-| 6 | Mem0 einrichten (Cloud oder Self-Hosted) | ~/.claude/config/memory.json | Vor Agent-Start |
-| 7 | Recall Memory DB starten | Docker (PostgreSQL) oder SQLite | Vor Agent-Start |
-| 8 | Claude API Key erstellen | console.anthropic.com | Vor Agent-Start |
-| 9 | GitHub Token erstellen | github.com/settings/tokens | Fuer GitHub-Connector |
-| 10 | Notion Token erstellen | notion.so/my-integrations | Fuer Notion-Connector |
-| 11 | Slack Webhook erstellen | api.slack.com/apps | Fuer Benachrichtigungen |
-| 12 | WhatsApp Business (optional) | business.facebook.com | Fuer mobile Steuerung |
-| 13 | Linear Account (optional) | linear.app | Fuer Task-Management |
-| 14 | GitHub Repo erstellen | github.com/new | Fuer Code + Sync |
-| 15 | DNS + Domain (optional) | cloudflare.com | Nur fuer Cloud mit Domain |
+| 3 | `mkdir -p ~/.claude/config` erstellen | Terminal | Vor Config-Dateien |
+| 4 | Neo4j Passwort waehlen | .env Datei | Vor DB-Start |
+| 5 | Redis Passwort waehlen | .env Datei | Vor DB-Start |
+| 6 | Core Memory erstellen | ~/.claude/core-memory.json | Vor Agent-Start |
+| 7 | Mem0 einrichten (Cloud oder Self-Hosted) | ~/.claude/config/memory.json | Vor Agent-Start |
+| 8 | Recall Memory DB starten | Docker (PostgreSQL) oder SQLite | Vor Agent-Start |
+| 9 | Claude API Key erstellen | console.anthropic.com | Vor Agent-Start |
+| 10 | GitHub Token erstellen | github.com/settings/tokens | Fuer GitHub-Connector |
+| 11 | Notion Token erstellen | notion.so/my-integrations | Fuer Notion-Connector |
+| 12 | Slack Webhook erstellen | api.slack.com/apps | Fuer Benachrichtigungen |
+| 13 | WhatsApp Business (optional) | business.facebook.com | Fuer mobile Steuerung |
+| 14 | Linear Account (optional) | linear.app | Fuer Task-Management |
+| 15 | GitHub Repo erstellen | github.com/new | Fuer Code + Sync |
+| 16 | DNS + Domain (optional) | cloudflare.com | Nur fuer Cloud mit Domain |
 
 Alles andere machen die Agenten automatisch.
+
+---
+
+## 12. Verwandte Dokumente
+
+| Dokument | Beschreibung |
+|----------|-------------|
+| [01-PROJEKTPLANUNG.md](01-PROJEKTPLANUNG.md) | Gesamtarchitektur, Agenten-Rollen, Hook-System, Gehirn-Schichten |
+| [02-RUNBOOK.md](02-RUNBOOK.md) | Betriebshandbuch — Wartung, Troubleshooting, Monitoring-Prozesse |
+| [04-INSTALLATIONS-GUIDE.md](04-INSTALLATIONS-GUIDE.md) | Schritt-fuer-Schritt Installation fuer Windows, Mac und Cloud |

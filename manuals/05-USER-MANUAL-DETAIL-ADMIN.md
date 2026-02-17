@@ -30,23 +30,26 @@
 | 4.1 | Auto-Recall + Auto-Capture (Schicht 2) | 32 |
 | 4.2 | HippoRAG 2 (Schicht 3) | 34 |
 | 4.3 | Agentic RAG (Schicht 4) | 36 |
-| 4.4 | Agentic Learning Graphs (Schicht 5) | 37 |
-| 4.5 | Recall Memory (Schicht 6) | 38 |
-| 5 | Profil-System | 34 |
-| 6 | Fragenkatalog | 36 |
-| 7 | Multi-Model Routing | 38 |
-| 8 | Kommunikation | 39 |
-| 9 | Connectoren + MCP | 41 |
-| 10 | Web-Scanner | 43 |
-| 11 | Datenbanken | 45 |
-| 12 | Funktions-Registry | 48 |
-| 13 | Endpoint-Registry | 52 |
-| 14 | Einstellungen | 55 |
-| 15 | Administration | 60 |
-| 16 | Fehlerbehebung | 65 |
-| A | Anhang: Alle Commands | 68 |
-| B | Anhang: Alle Rules | 70 |
-| C | Anhang: Alle Hook-Konfigurationen | 73 |
+| 4.4 | Agentic Learning Graphs (Schicht 5) | 38 |
+| 4.5 | Recall Memory (Schicht 6) | 40 |
+| 5 | Profil-System | 44 |
+| 6 | Fragenkatalog | 46 |
+| 7 | Multi-Model Routing | 48 |
+| 8 | Kommunikation | 49 |
+| 9 | Connectoren + MCP | 51 |
+| 10 | Web-Scanner | 53 |
+| 11 | Datenbanken | 57 |
+| 12 | Funktions-Registry | 60 |
+| 13 | Endpoint-Registry | 64 |
+| 14 | Einstellungen | 67 |
+| 15 | Administration | 72 |
+| 16 | Fehlerbehebung | 77 |
+| A | Anhang: Alle Commands | 80 |
+| B | Anhang: Alle Rules | 83 |
+| C | Anhang: Alle Hook-Konfigurationen | 86 |
+
+> **Verwandte Dokumente:**
+> Ersteinrichtung → 04-INSTALLATIONS-GUIDE.md | Detaillierte Einstellungen → 03-SETUP-ANLEITUNG.md | Kurzanleitung → 06-USER-MANUAL-KURZ-ADMIN.md
 
 ---
 
@@ -62,7 +65,7 @@ Ein autonomes Multi-Agent-System bestehend aus 10 spezialisierten KI-Agenten die
 |-----------|:------:|----------|
 | Agenten | 10 | Spezialisierte Arbeiter |
 | Hooks | 17 | Automatische Qualitaets- und Sicherheits-Kontrolle |
-| Datenbanken | 3 | Neo4j (Graph), Qdrant (Vektor), Redis (Cache) |
+| Datenbanken | 4 | Neo4j (Graph), Qdrant (Vektor), Redis (Cache), PostgreSQL/SQLite (Recall Memory) |
 | MCP-Server | 4+ | RAG-API, Doc-Scanner, GitHub, Notion |
 | Kommunikation | 4 | Terminal, Slack, WhatsApp, Linear |
 
@@ -119,12 +122,12 @@ Nutzer → [Slack/WhatsApp/Linear/Terminal]
 | Command | FN-ID | Syntax | Beispiel |
 |---------|-------|--------|---------|
 | `/briefing` | FN-001 | `/briefing` | `/briefing` |
-| `/plan` | FN-003 | `/plan` | `/plan` |
+| `/plan` | FN-002 | `/plan` | `/plan` |
 | `/delegate` | FN-004 | `/delegate AGENT TASK` | `/delegate coder "Login-Seite bauen"` |
 | `/katalog` | FN-006 | `/katalog [filter]` | `/katalog blocker` |
 | `/fortschritt` | FN-005 | `/fortschritt` | `/fortschritt` |
 | `/stop-alle` | FN-008 | `/stop-alle` | `/stop-alle` |
-| `/weiter` | — | `/weiter` | `/weiter` |
+| `/weiter` | FN-060 | `/weiter` | `/weiter` |
 
 #### Rules
 
@@ -231,6 +234,8 @@ Nutzer → [Slack/WhatsApp/Linear/Terminal]
 | `/coverage` | FN-021 | `/coverage` |
 | `/regression` | FN-022 | `/regression` |
 
+> **Hinweis:** FN-018 (Tests schreiben) wird automatisch vom Tester-Agent ausgefuehrt (kein manueller Command).
+
 ---
 
 ### 2.5 Reviewer
@@ -256,6 +261,8 @@ Nutzer → [Slack/WhatsApp/Linear/Terminal]
 | `/commit` | FN-025 | `/commit [MESSAGE]` |
 | `/repo` | FN-027 | `/repo URL` |
 | `/changelog` | FN-026 | `/changelog` |
+
+> **Hinweis:** FN-024 (Auto-Fix) wird automatisch vom Reviewer-Agent ausgefuehrt (kein manueller Command).
 
 ---
 
@@ -515,6 +522,8 @@ Feature: Warenkorb. Task: Checkout-Flow implementieren. Blocker: Payment-API Zug
 ═══════════════════════════════════════════════════
 ```
 
+**Verfuegbare Commands:** `/core-read` (FN-051), `/core-update` (FN-052)
+
 **Agent-Tools:**
 
 | Tool | Beschreibung | Parameter | Rueckgabe |
@@ -598,6 +607,8 @@ Agent beendet Antwort
 |-------|-------------|-------------|---------|
 | Long-Term | Permanent (nutzer-uebergreifend) | Alle Sessions, alle Projekte | "Nutzer bevorzugt TypeScript" |
 | Short-Term | Nur aktuelle Session | Nur diese Session | "Arbeiten gerade an der Login-Seite" |
+
+**Verfuegbare Commands:** `/memory-search` (FN-053), `/memory-store` (FN-054), `/memory-list` (FN-055), `/memory-get` (FN-056), `/memory-forget` (FN-057)
 
 **Agent-Tools:**
 
@@ -708,6 +719,8 @@ Session laeuft (Nachrichten, Tool-Calls, Antworten)
 | `tool_input` | Tool-Parameter | `{"file_path": "..."}` |
 | `tool_output` | Tool-Ergebnis | `"Datei erstellt"` |
 
+**Verfuegbare Commands:** `/conv-search` (FN-058), `/conv-search-date` (FN-059)
+
 **Agent-Tools:**
 
 | Tool | Beschreibung | Parameter | Rueckgabe |
@@ -733,7 +746,7 @@ Session laeuft (Nachrichten, Tool-Calls, Antworten)
 
 ---
 
-## Seite 34 — Kapitel 5: Profil-System
+## Seite 44 — Kapitel 5: Profil-System
 
 ### 5.1 Wie Profile funktionieren
 
@@ -768,7 +781,7 @@ EOF
 
 ---
 
-## Seite 36 — Kapitel 6: Fragenkatalog
+## Seite 46 — Kapitel 6: Fragenkatalog
 
 ### 6.1 Fragen-Typen
 
@@ -789,7 +802,7 @@ EOF
 
 ---
 
-## Seite 38 — Kapitel 7: Multi-Model Routing
+## Seite 48 — Kapitel 7: Multi-Model Routing
 
 | Stufe | Modell | Trigger | Kosten-Faktor |
 |-------|--------|---------|:-------------:|
@@ -809,7 +822,7 @@ EOF
 
 ---
 
-## Seite 39 — Kapitel 8: Kommunikation
+## Seite 49 — Kapitel 8: Kommunikation
 
 ### 8.1 Kanael-Einstellungen
 
@@ -830,7 +843,7 @@ EOF
 
 ---
 
-## Seite 41 — Kapitel 9: Connectoren + MCP
+## Seite 51 — Kapitel 9: Connectoren + MCP
 
 ### 9.1 Installierte MCP-Server
 
@@ -856,7 +869,7 @@ claude mcp list
 
 ---
 
-## Seite 43 — Kapitel 10: Web-Scanner
+## Seite 53 — Kapitel 10: Web-Scanner
 
 Der Web-Scanner ueberwacht Webseiten (Dokumentationen, APIs, Tutorials) und importiert
 Aenderungen automatisch in das Gehirn-System (HippoRAG 2). So bleibt das Wissen aktuell.
@@ -1124,7 +1137,7 @@ Bei Aenderungen bekommst du eine Notification.
 
 ---
 
-## Seite 45 — Kapitel 11: Datenbanken
+## Seite 57 — Kapitel 11: Datenbanken
 
 ### 11.1 Neo4j Administration
 
@@ -1155,9 +1168,44 @@ Bei Aenderungen bekommst du eine Notification.
 | Flush | `FLUSHDB` (VORSICHT!) |
 | Backup | Automatisch via appendonly |
 
+### 11.4 PostgreSQL/SQLite (Recall Memory)
+
+**Status pruefen:**
+```bash
+docker exec -it recall-db pg_isready
+```
+
+**Backup erstellen:**
+```bash
+docker exec recall-db pg_dump -U recall_user recall_memory > backup_recall_$(date +%Y%m%d).sql
+```
+
+**Backup wiederherstellen:**
+```bash
+docker exec -i recall-db psql -U recall_user recall_memory < backup_recall_DATUM.sql
+```
+
+**Groesse pruefen:**
+```bash
+docker exec recall-db psql -U recall_user recall_memory -c "SELECT pg_size_pretty(pg_database_size('recall_memory'));"
+```
+
+**Alte Eintraege aufraemen (aelter als 90 Tage):**
+```bash
+docker exec recall-db psql -U recall_user recall_memory -c "DELETE FROM conversations WHERE started_at < NOW() - INTERVAL '90 days';"
+```
+
+**SQLite-Alternative:**
+```bash
+# Backup
+cp ~/.claude/data/recall.db ~/.claude/data/recall_backup_$(date +%Y%m%d).db
+# Groesse
+ls -lh ~/.claude/data/recall.db
+```
+
 ---
 
-## Seite 48 — Kapitel 12: Funktions-Registry
+## Seite 60 — Kapitel 12: Funktions-Registry
 
 Alle Funktionen werden mit eindeutiger ID registriert.
 
@@ -1224,10 +1272,14 @@ Alle Funktionen werden mit eindeutiger ID registriert.
 | FN-057 | Gehirn | Memory loeschen | Memory-ID | FN-053 |
 | FN-058 | Gehirn | Konversation suchen | Suchbegriff | — |
 | FN-059 | Gehirn | Konversation nach Datum | Von + Bis | — |
+| FN-060 | Berater | Naechsten Schritt ausfuehren | — | Naechster Task-Schritt |
+| FN-061 | Doc-Scanner | URL aus Scan-Liste entfernen | URL/Nummer | Bestaetigung |
+| FN-062 | Doc-Scanner | URL-Einstellungen aendern | URL/Nummer + Parameter | Bestaetigung |
+| FN-063 | Doc-Scanner | Scanner-Konfiguration anzeigen/aendern | Config-Key + Wert | Bestaetigung |
 
 ---
 
-## Seite 52 — Kapitel 13: Endpoint-Registry
+## Seite 64 — Kapitel 13: Endpoint-Registry
 
 **Format:** EP-XXX (dreistellig, fortlaufend)
 
@@ -1243,7 +1295,7 @@ Beispiel-Struktur:
 
 ---
 
-## Seite 55 — Kapitel 14: Einstellungen
+## Seite 67 — Kapitel 14: Einstellungen
 
 ### 14.1 Globale Einstellungen
 
@@ -1274,7 +1326,7 @@ Beispiel-Struktur:
 
 ---
 
-## Seite 60 — Kapitel 15: Administration
+## Seite 72 — Kapitel 15: Administration
 
 ### 15.1 System starten/stoppen
 
@@ -1326,7 +1378,7 @@ bash scripts/sync-setup.sh pull
 
 ---
 
-## Seite 65 — Kapitel 16: Fehlerbehebung
+## Seite 77 — Kapitel 16: Fehlerbehebung
 
 | Problem | Ursache | Loesung |
 |---------|---------|---------|
@@ -1340,17 +1392,17 @@ bash scripts/sync-setup.sh pull
 
 ---
 
-## Seite 68 — Anhang A: Alle Commands
+## Seite 80 — Anhang A: Alle Commands
 
 | Command | Agent | FN-ID | Beschreibung |
 |---------|-------|-------|-------------|
 | `/briefing` | Berater | FN-001 | Strukturiertes Briefing starten |
-| `/plan` | Berater | FN-003 | Aufgabenplan erstellen |
+| `/plan` | Berater | FN-002 | Aufgabenplan erstellen |
 | `/delegate` | Berater | FN-004 | Task an Agent zuweisen |
 | `/katalog` | Berater | FN-006 | Fragenkatalog anzeigen |
 | `/fortschritt` | Berater | FN-005 | Status aller Agenten |
 | `/stop-alle` | Berater | FN-008 | Alle stoppen |
-| `/weiter` | Berater | — | Nach Blocker fortsetzen |
+| `/weiter` | Berater | FN-060 | Naechsten Schritt ausfuehren |
 | `/design` | Architekt | FN-009 | System-Design erstellen |
 | `/veto` | Architekt | FN-010 | Design blockieren |
 | `/deps` | Architekt | FN-011 | Abhaengigkeiten zeigen |
@@ -1381,6 +1433,9 @@ bash scripts/sync-setup.sh pull
 | `/scan-add` | Doc-Scanner | FN-038 | URL hinzufuegen |
 | `/scan-diff` | Doc-Scanner | FN-039 | Aenderungen zeigen |
 | `/kb-import` | Doc-Scanner | FN-040 | KB importieren |
+| `/scan-remove` | Doc-Scanner | FN-061 | URL aus Scan-Liste entfernen |
+| `/scan-edit` | Doc-Scanner | FN-062 | URL-Einstellungen aendern |
+| `/scan-config` | Doc-Scanner | FN-063 | Scanner-Konfiguration anzeigen/aendern |
 | `/deploy` | DevOps | FN-041 | Deployment starten |
 | `/env` | DevOps | FN-042 | Env-Variablen |
 | `/ci` | DevOps | FN-043 | CI/CD Pipeline |
@@ -1400,22 +1455,22 @@ bash scripts/sync-setup.sh pull
 | `/memory-forget` | Gehirn | FN-057 | Erinnerung loeschen |
 | `/conv-search` | Gehirn | FN-058 | Konversationshistorie durchsuchen |
 | `/conv-search-date` | Gehirn | FN-059 | Konversationen nach Datum suchen |
-| `/status` | Alle | — | Agent-Status |
-| `/memory` | Alle | — | DB durchsuchen |
-| `/save` | Alle | — | In DB speichern |
-| `/fragen` | Alle | — | Offene Fragen |
-| `/profil` | Alle | — | Aktive Profile |
-| `/cache` | Alle | — | Cache abfragen |
-| `/tools` | Alle | — | Verfuegbare Tools |
+| `/status` | Alle | System-Command | Agent-Status anzeigen |
+| `/memory` | Alle | FN-053 | Alias fuer /memory-search |
+| `/save` | Alle | System-Command | Aktuellen Kontext in Datenbank speichern |
+| `/fragen` | Alle | System-Command | Offene Fragen anzeigen |
+| `/profil` | Alle | System-Command | Aktive Profile anzeigen |
+| `/cache` | Alle | System-Command | Smart Cache abfragen oder leeren |
+| `/tools` | Alle | System-Command | Verfuegbare Tools und MCP-Server anzeigen |
 
 ---
 
-## Seite 70 — Anhang B: Alle Rules
+## Seite 83 — Anhang B: Alle Rules
 
 [Vollstaendige Rule-Liste: Siehe Projektplanung Kapitel 3, alle R-XX-XX Rules]
 
 ---
 
-## Seite 73 — Anhang C: Alle Hook-Konfigurationen
+## Seite 86 — Anhang C: Alle Hook-Konfigurationen
 
 [Vollstaendige settings.json: Siehe Runbook Schritt 4.2]

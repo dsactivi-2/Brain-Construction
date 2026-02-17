@@ -8,9 +8,20 @@ Schritt-fuer-Schritt Installation fuer Terminal und Cloud.
 
 ### A1: Windows Installation
 
+#### Voraussetzungen
+
+> **Wichtig:** Unter Windows wird **Git Bash** oder **WSL2** als Shell vorausgesetzt. Alle Befehle in dieser Anleitung verwenden Unix-Syntax.
+
+#### Voraussetzungen installieren
+```bash
+# Git Bash oder WSL2 oeffnen
+
+# Claude Code CLI installieren (falls noch nicht vorhanden)
+npm install -g @anthropic-ai/claude-code
+```
+
 #### Voraussetzungen pruefen
 ```bash
-# Git Bash oeffnen (muss installiert sein)
 git --version          # Git 2.x erwartet
 node --version         # Node.js 18+ erwartet
 npm --version          # npm 9+ erwartet
@@ -50,18 +61,16 @@ notepad .env
 # Passwoerter + API-Keys eintragen
 ```
 
-#### Schritt 5: MCP-Server starten
-```bash
-docker compose up -d rag-api doc-scanner
-```
-
-#### Schritt 6: Hook-Skripte installieren
+#### Schritt 5: Hook-Skripte installieren
 ```bash
 bash scripts/install.sh
 # Prueft ob alles da ist, kopiert Hooks + Skills + Settings
 ```
 
-#### Schritt 7: MCP-Server in Claude Code registrieren
+#### Schritt 6: MCP-Server in Claude Code registrieren
+
+> **Hinweis:** Fuer lokale Entwicklung werden MCP-Server direkt ueber `claude mcp add` gestartet. Docker-basierte MCP-Server (`docker compose up -d rag-api doc-scanner`) sind nur fuer die Cloud-Variante (Teil B) vorgesehen.
+
 ```bash
 claude mcp add rag-api -- python3 ~/Desktop/claude-agent-team/mcp-servers/rag-api/server.py
 claude mcp add doc-scanner -- python3 ~/Desktop/claude-agent-team/mcp-servers/doc-scanner/server.py
@@ -69,11 +78,49 @@ claude mcp add github -- npx @modelcontextprotocol/server-github
 claude mcp add notion -- npx @modelcontextprotocol/server-notion
 ```
 
-#### Schritt 8: Health-Check
+#### Schritt 7: Health-Check
 ```bash
 bash scripts/health-check.sh
 # Alle Services muessen "OK" zeigen
 ```
+
+#### Schritt 8: Gehirn-System einrichten
+
+```bash
+# 1. Core Memory (Schicht 1) — immer im Kontext
+mkdir -p ~/.claude
+cat > ~/.claude/core-memory.json << 'EOF'
+{
+  "blocks": {
+    "user": { "value": "", "limit": 4000 },
+    "projekt": { "value": "", "limit": 4000 },
+    "entscheidungen": { "value": "", "limit": 4000 },
+    "fehler_log": { "value": "", "limit": 4000 },
+    "aktuelle_arbeit": { "value": "", "limit": 4000 }
+  }
+}
+EOF
+
+# 2. Auto-Recall/Capture (Schicht 2) — Mem0
+mkdir -p ~/.claude/config
+cat > ~/.claude/config/memory.json << 'EOF'
+{
+  "provider": "mem0",
+  "api_key": "DEIN_MEM0_API_KEY",
+  "org_id": "DEINE_ORG_ID",
+  "project_id": "DEIN_PROJECT_ID"
+}
+EOF
+
+# 3. Recall Memory (Schicht 6) — Chat-Historie
+# Option A: SQLite (einfach)
+# Wird automatisch in ~/.claude/data/recall.db erstellt
+mkdir -p ~/.claude/data
+
+# Option B: PostgreSQL (siehe 03-SETUP-ANLEITUNG.md Abschnitt 2.7)
+```
+
+> **Details:** Siehe [03-SETUP-ANLEITUNG.md](03-SETUP-ANLEITUNG.md) Abschnitte 2.5 (Core Memory), 2.6 (Mem0) und 2.7 (Recall Memory) fuer ausfuehrliche Erklaerungen und Konfigurationsoptionen.
 
 #### Schritt 9: Testen
 ```bash
@@ -143,18 +190,16 @@ nano .env    # oder: open -e .env
 # Passwoerter + API-Keys eintragen
 ```
 
-#### Schritt 5: MCP-Server starten
-```bash
-docker compose up -d rag-api doc-scanner
-```
-
-#### Schritt 6: Hook-Skripte installieren
+#### Schritt 5: Hook-Skripte installieren
 ```bash
 bash scripts/install.sh
 chmod +x ~/.claude/hooks/*.sh
 ```
 
-#### Schritt 7: MCP-Server in Claude Code registrieren
+#### Schritt 6: MCP-Server in Claude Code registrieren
+
+> **Hinweis:** Fuer lokale Entwicklung werden MCP-Server direkt ueber `claude mcp add` gestartet. Docker-basierte MCP-Server sind nur fuer die Cloud-Variante (Teil B) vorgesehen.
+
 ```bash
 claude mcp add rag-api -- python3 ~/Desktop/claude-agent-team/mcp-servers/rag-api/server.py
 claude mcp add doc-scanner -- python3 ~/Desktop/claude-agent-team/mcp-servers/doc-scanner/server.py
@@ -162,10 +207,48 @@ claude mcp add github -- npx @modelcontextprotocol/server-github
 claude mcp add notion -- npx @modelcontextprotocol/server-notion
 ```
 
-#### Schritt 8: Health-Check
+#### Schritt 7: Health-Check
 ```bash
 bash scripts/health-check.sh
 ```
+
+#### Schritt 8: Gehirn-System einrichten
+
+```bash
+# 1. Core Memory (Schicht 1) — immer im Kontext
+mkdir -p ~/.claude
+cat > ~/.claude/core-memory.json << 'EOF'
+{
+  "blocks": {
+    "user": { "value": "", "limit": 4000 },
+    "projekt": { "value": "", "limit": 4000 },
+    "entscheidungen": { "value": "", "limit": 4000 },
+    "fehler_log": { "value": "", "limit": 4000 },
+    "aktuelle_arbeit": { "value": "", "limit": 4000 }
+  }
+}
+EOF
+
+# 2. Auto-Recall/Capture (Schicht 2) — Mem0
+mkdir -p ~/.claude/config
+cat > ~/.claude/config/memory.json << 'EOF'
+{
+  "provider": "mem0",
+  "api_key": "DEIN_MEM0_API_KEY",
+  "org_id": "DEINE_ORG_ID",
+  "project_id": "DEIN_PROJECT_ID"
+}
+EOF
+
+# 3. Recall Memory (Schicht 6) — Chat-Historie
+# Option A: SQLite (einfach)
+# Wird automatisch in ~/.claude/data/recall.db erstellt
+mkdir -p ~/.claude/data
+
+# Option B: PostgreSQL (siehe 03-SETUP-ANLEITUNG.md Abschnitt 2.7)
+```
+
+> **Details:** Siehe [03-SETUP-ANLEITUNG.md](03-SETUP-ANLEITUNG.md) Abschnitte 2.5 (Core Memory), 2.6 (Mem0) und 2.7 (Recall Memory) fuer ausfuehrliche Erklaerungen und Konfigurationsoptionen.
 
 #### Schritt 9: Testen
 ```bash
@@ -191,8 +274,8 @@ Mac Terminal-Installation abgeschlossen.
 2. "Add Server"
    - Location: Falkenstein (DE) oder Nuernberg (DE)
    - Image: Ubuntu 24.04
-   - Type: CPX31 (4 vCPU, 8 GB RAM) fuer Light
-          oder CPX41 (8 vCPU, 16 GB RAM) fuer Standard
+   - Type: CPX41 (8 vCPU, 16 GB RAM) fuer Light-Variante
+          oder CX51 (8 vCPU, 32 GB RAM) fuer Standard-Variante
    - SSH Key hinzufuegen
    - Networking: Public IPv4
 3. "Create & Buy"
@@ -248,17 +331,37 @@ docker compose logs -f --tail=50
 
 ### B3: Services verbinden
 
+Die MCP-Server laufen via Docker auf dem Cloud-Server. Lokal verbindest du dich per **SSH-Tunnel**, damit keine Ports oeffentlich offen sein muessen.
+
 ```bash
 # Von deinem lokalen Rechner aus:
 
-# MCP-Server auf Cloud zeigen lassen
-claude mcp add rag-api -- curl http://DEINE_IP:8100
-claude mcp add doc-scanner -- curl http://DEINE_IP:8101
+# 1. SSH-Tunnel oeffnen (alle relevanten Ports)
+ssh -L 8100:localhost:8100 \
+    -L 8101:localhost:8101 \
+    -L 7687:localhost:7687 \
+    -L 6333:localhost:6333 \
+    -L 6379:localhost:6379 \
+    -L 5432:localhost:5432 \
+    claude@DEINE_IP
 
-# Oder: SSH Tunnel (sicherer, kein offener Port)
-ssh -L 8100:localhost:8100 -L 8101:localhost:8101 claude@DEINE_IP
-# Dann lokal verbinden wie bei Terminal-Version
+# 2. In einem neuen Terminal: MCP-Server lokal registrieren
+#    (die Tunnel leiten die Verbindung zum Server weiter)
+claude mcp add rag-api -- python3 ~/Desktop/claude-agent-team/mcp-servers/rag-api/server.py
+claude mcp add doc-scanner -- python3 ~/Desktop/claude-agent-team/mcp-servers/doc-scanner/server.py
+claude mcp add github -- npx @modelcontextprotocol/server-github
+claude mcp add notion -- npx @modelcontextprotocol/server-notion
 ```
+
+> **Erklaerung der Ports:**
+> | Port | Service | Zweck |
+> |------|---------|-------|
+> | 8100 | RAG-API | MCP-Server fuer Wissensbasis |
+> | 8101 | Doc-Scanner | MCP-Server fuer Dokumentenanalyse |
+> | 7687 | Neo4j (Bolt) | Graph-Datenbank |
+> | 6333 | Qdrant | Vektor-Datenbank |
+> | 6379 | Redis | Cache + Queue |
+> | 5432 | PostgreSQL | Recall Memory |
 
 ### B4: Testen
 
@@ -270,14 +373,51 @@ ssh claude@DEINE_IP "cd claude-agent-team && bash scripts/health-check.sh"
 bash scripts/health-check.sh
 ```
 
-### B5: Automatischer Start nach Reboot
+### B5: Gehirn-System einrichten (lokal)
+
+Auch bei der Cloud-Variante wird das Gehirn-System **lokal** konfiguriert:
+
+```bash
+# 1. Core Memory (Schicht 1) — immer im Kontext
+mkdir -p ~/.claude
+cat > ~/.claude/core-memory.json << 'EOF'
+{
+  "blocks": {
+    "user": { "value": "", "limit": 4000 },
+    "projekt": { "value": "", "limit": 4000 },
+    "entscheidungen": { "value": "", "limit": 4000 },
+    "fehler_log": { "value": "", "limit": 4000 },
+    "aktuelle_arbeit": { "value": "", "limit": 4000 }
+  }
+}
+EOF
+
+# 2. Auto-Recall/Capture (Schicht 2) — Mem0
+mkdir -p ~/.claude/config
+cat > ~/.claude/config/memory.json << 'EOF'
+{
+  "provider": "mem0",
+  "api_key": "DEIN_MEM0_API_KEY",
+  "org_id": "DEINE_ORG_ID",
+  "project_id": "DEIN_PROJECT_ID"
+}
+EOF
+
+# 3. Recall Memory (Schicht 6) — Chat-Historie
+# PostgreSQL laeuft auf dem Cloud-Server (via SSH-Tunnel erreichbar auf localhost:5432)
+# Konfiguration in ~/.claude/config/databases.yaml (siehe 03-SETUP-ANLEITUNG.md Abschnitt 2.4)
+```
+
+> **Details:** Siehe [03-SETUP-ANLEITUNG.md](03-SETUP-ANLEITUNG.md) Abschnitte 2.5, 2.6 und 2.7 fuer ausfuehrliche Erklaerungen.
+
+### B6: Automatischer Start nach Reboot (auf dem Server)
 
 ```bash
 # Auf dem Server:
 # Docker Compose startet automatisch (--restart always ist gesetzt)
 
 # Zusaetzlich: Systemd Service fuer extra Sicherheit
-sudo cat > /etc/systemd/system/claude-agent-team.service << 'EOF'
+sudo tee /etc/systemd/system/claude-agent-team.service << 'EOF'
 [Unit]
 Description=Claude Agent Team
 After=docker.service
@@ -298,7 +438,7 @@ sudo systemctl enable claude-agent-team
 sudo systemctl start claude-agent-team
 ```
 
-### B6: Monitoring einrichten
+### B7: Monitoring einrichten
 
 ```bash
 # Uptime Kuma (Self-Hosted Monitoring)
@@ -314,11 +454,13 @@ docker run -d \
 #   - Neo4j: http://localhost:7474
 #   - Qdrant: http://localhost:6333
 #   - Redis: TCP localhost:6379
+#   - PostgreSQL: TCP localhost:5432
 #   - RAG-API: http://localhost:8100/health
 #   - Doc-Scanner: http://localhost:8101/health
+#   - Ollama (optional): http://localhost:11434/api/tags
 ```
 
-### B7: SSL + Domain (optional)
+### B8: SSL + Domain (optional)
 
 ```bash
 # Caddy als Reverse Proxy mit automatischem SSL:
@@ -340,7 +482,7 @@ EOF
 docker compose up -d caddy
 ```
 
-### B8: Firewall
+### B9: Firewall
 
 ```bash
 # Nur noetige Ports oeffnen
@@ -355,6 +497,22 @@ sudo ufw enable
 
 ---
 
+## Hinweis zu referenzierten Dateien
+
+Die folgenden Dateien werden in dieser Anleitung referenziert, aber erst im Rahmen der Projekteinrichtung erstellt:
+
+| Datei | Beschreibung | Erstellt in |
+|-------|-------------|-------------|
+| `docker-compose.yml` | Docker Compose Konfiguration fuer alle Services | 02-RUNBOOK.md, Abschnitt Deployment |
+| `requirements.txt` | Python-Abhaengigkeiten fuer MCP-Server | 02-RUNBOOK.md, Abschnitt Projektstruktur |
+| `.env.example` | Vorlage fuer Umgebungsvariablen (Passwoerter, API-Keys) | 02-RUNBOOK.md, Abschnitt Konfiguration |
+| `scripts/install.sh` | Installations-Skript (kopiert Hooks, Skills, Settings) | 02-RUNBOOK.md, Abschnitt Skripte |
+| `scripts/health-check.sh` | Prueft ob alle Services erreichbar sind | 02-RUNBOOK.md, Abschnitt Monitoring |
+
+> **Wenn eine dieser Dateien noch nicht existiert:** Erstelle zuerst das Grundgeruest gemaess [02-RUNBOOK.md](02-RUNBOOK.md), bevor du die Installationsschritte ausfuehrst.
+
+---
+
 ## TEIL C: Fehlerbehebung
 
 | Problem | Loesung |
@@ -364,6 +522,12 @@ sudo ufw enable
 | Container startet nicht | `docker compose logs SERVICE` pruefen |
 | MCP-Server nicht in Claude Code | `claude mcp list` pruefen, ggf. `claude mcp remove` + neu hinzufuegen |
 | Neo4j Connection refused | Container laeuft? `docker compose ps` → `docker compose restart neo4j` |
+| PostgreSQL Connection refused | Container laeuft? `docker compose ps` → `docker exec recall-db pg_isready` pruefen. Port 5432 belegt? Anderen Port nutzen: `-p 5433:5432` |
+| PostgreSQL Authentifizierung fehlgeschlagen | Passwort in `.env` und `databases.yaml` abgleichen. Ggf. Volume loeschen und neu erstellen: `docker volume rm recall-data` |
+| Mem0 API-Fehler / 401 Unauthorized | API-Key in `~/.claude/config/memory.json` pruefen. Bei Cloud: Key auf https://app.mem0.ai erneuern |
+| Ollama-Modell nicht gefunden | `docker exec ollama ollama list` pruefen. Modell nachladen: `docker exec ollama ollama pull nomic-embed-text` |
+| Core Memory nicht gefunden | Datei `~/.claude/core-memory.json` existiert? `ls -la ~/.claude/core-memory.json` pruefen. Ggf. Schritt 8/9 (Gehirn-Setup) wiederholen |
+| `~/.claude/config/` Ordner fehlt | `mkdir -p ~/.claude/config` ausfuehren. Dieser Schritt wird leicht vergessen |
 | Rate-Limit erreicht | Model-Fallback greift automatisch, oder kurz warten |
 | Health-Check schlaegt fehl | Einzelne Services pruefen: `docker compose logs SERVICE_NAME` |
 | Git push rejected | `git pull --rebase` zuerst ausfuehren |
@@ -395,3 +559,13 @@ cp .env.example .env && nano .env
 docker compose up -d
 bash scripts/health-check.sh
 ```
+
+---
+
+## Verwandte Dokumente
+
+| Dokument | Beschreibung |
+|----------|-------------|
+| [01-PROJEKTPLANUNG.md](01-PROJEKTPLANUNG.md) | Gesamtarchitektur, Agenten-Rollen, Hook-System, Gehirn-Schichten |
+| [02-RUNBOOK.md](02-RUNBOOK.md) | Betriebshandbuch — Wartung, Troubleshooting, Monitoring-Prozesse |
+| [03-SETUP-ANLEITUNG.md](03-SETUP-ANLEITUNG.md) | Detailliertes Setup aller Datenbanken, MCP-Server, Gehirn-Schichten |

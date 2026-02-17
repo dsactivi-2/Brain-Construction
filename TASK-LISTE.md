@@ -28,17 +28,21 @@ Manual    Manual
   └────┬────┘
        ▼
   Phase 7: Finaler Review (fertig)
+       │
+       ▼
+  Phase 8: Deep Review + Fixes (in Arbeit)
 ```
 
 ## Status
 
-| # | Phase | Status | Blockiert von |
-|---|-------|:------:|:-------------:|
-| 0 | Repo + Checkliste + Tasks | Fertig | — |
-| 1 | Projektplanung | Fertig | — |
-| 2 | Runbook | Fertig | — |
-| 3 | Setup-Anleitung | Fertig | — |
-| 4 | Installations-Guide | Fertig | — |
-| 5 | User-Manual Detail | Fertig | — |
-| 6 | User-Manual Kurz | Fertig | — |
-| 7 | Finaler Review + Push | Fertig | — |
+| # | Phase | Deliverables | Status |
+|---|-------|-------------|:------:|
+| 0 | Grundlage | Repo, Checkliste, Task-Liste | Fertig |
+| 1 | Projektplanung | 01-PROJEKTPLANUNG.md | Fertig |
+| 2 | Runbook | 02-RUNBOOK.md | Fertig |
+| 3 | Setup-Anleitung | 03-SETUP-ANLEITUNG.md | Fertig |
+| 4 | Installations-Guide | 04-INSTALLATIONS-GUIDE.md | Fertig |
+| 5 | User-Manual Detail | 3x Detail-Manual (Admin, Supervisor, Worker) | Fertig |
+| 6 | User-Manual Kurz | 3x Kurz-Manual (Admin, Supervisor, Worker) | Fertig |
+| 7 | Finaler Review | Alle Phasen geprueft | Fertig |
+| 8 | Deep Review + Fixes | Alle Findings behoben | In Arbeit |

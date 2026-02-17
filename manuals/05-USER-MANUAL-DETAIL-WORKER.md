@@ -32,6 +32,8 @@ Ein KI-Team das fuer dich programmiert. Du gibst einen Auftrag und das Team:
 
 Du musst nur Fragen beantworten wenn welche kommen.
 
+Das System merkt sich alles automatisch. Du musst nichts speichern.
+
 ---
 
 ## Seite 4 — Kapitel 2: Einen Auftrag geben
@@ -63,15 +65,51 @@ Manchmal hat das Team Fragen. Du siehst sie:
 
 ---
 
+## Kapitel 4: Ergebnisse pruefen — Seite 8
+
+### 4.1 Status pruefen
+
+`/status` — Zeigt ob dein Auftrag noch laeuft oder fertig ist.
+
+### 4.2 Ergebnis ansehen
+
+`/fortschritt` — Zeigt was bisher erledigt wurde und was noch aussteht.
+
+### 4.3 Nicht zufrieden?
+
+Wenn das Ergebnis nicht passt:
+1. Beschreibe genau, was anders sein soll
+2. Nutze `/weiter` um den naechsten Versuch zu starten
+3. Bei groesseren Problemen den Supervisor informieren
+
+---
+
 ## Seite 10 — Kapitel 5: Verfuegbare Commands (Worker)
 
 | Command | Was |
 |---------|-----|
-| `/briefing` | Neuen Auftrag starten |
+| `/briefing` | Strukturiertes Briefing starten |
 | `/fortschritt` | Wie weit ist das Team? |
 | `/katalog` | Offene Fragen anzeigen |
-| `/weiter` | Nach Blocker-Antwort weitermachen |
+| `/weiter` | Naechsten Schritt ausfuehren |
 | `/status` | System-Status |
-| `/fragen` | Offene Fragen |
+| `/fragen` | Offene Fragen anzeigen |
 
 **Nicht verfuegbar:** Alles andere (Deploy, Admin, Reviews, DB, Server, etc.)
+
+---
+
+## Kapitel 6: Probleme loesen — Seite 11
+
+### 6.1 Haeufige Probleme
+
+| Problem | Was tun |
+|---------|---------|
+| Agent antwortet nicht | Warten (max. 2 Min.), dann Supervisor fragen |
+| Falsches Ergebnis | Genauer beschreiben was du willst |
+| Frage vom System | `/fragen` eingeben und beantworten |
+| Etwas unklar | Supervisor fragen |
+
+### 6.2 Hilfe holen
+
+Fuer alle Probleme, die du nicht selbst loesen kannst: Supervisor kontaktieren.

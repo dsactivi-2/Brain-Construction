@@ -36,19 +36,29 @@ und pruefst Ergebnisse. Du fasst die Technik nicht an.
 
 ---
 
+### Das Gedaechtnis
+
+Das System hat ein 6-Schichten-Gedaechtnis:
+- Es merkt sich ALLES aus frueheren Sessions
+- Wichtiges ist sofort verfuegbar (Core Memory)
+- Der Rest wird bei Bedarf automatisch abgerufen
+Du musst nichts manuell speichern oder erinnern.
+
+---
+
 ## 2. Schnellstart in 3 Schritten
 
 ```
 Schritt 1          Schritt 2          Schritt 3
 +-----------+      +-----------+      +-----------+
 | /briefing |----->| /plan     |----->| /status   |
-| Was laeuft|      | Auftrag   |      | Wie weit  |
-| gerade?   |      | erteilen  |      | sind sie? |
+| Briefing  |      | Aufgaben- |      | Wie weit  |
+| starten   |      | plan      |      | sind sie? |
 +-----------+      +-----------+      +-----------+
 ```
 
-1. **`/briefing`** eintippen -- Du siehst, was gerade laeuft.
-2. **`/plan`** eintippen -- Du gibst einen neuen Auftrag.
+1. **`/briefing`** eintippen -- Strukturiertes Briefing starten. Beschreibe deinen Auftrag.
+2. **`/plan`** eintippen -- Aufgabenplan erstellen.
 3. **`/status`** eintippen -- Du schaust, wie weit die Agenten sind.
 
 Das war's. Du bist startklar.
@@ -58,10 +68,12 @@ Das war's. Du bist startklar.
 ## 3. Auftrag geben (Beispiel-Gespraech)
 
 ```
-DU:    /plan
-SYSTEM: Was soll gemacht werden?
+DU:    /briefing
+SYSTEM: Strukturiertes Briefing gestartet. Was soll gemacht werden?
 DU:    Bitte die Login-Seite ueberarbeiten. Neues Design nach Vorlage X.
-SYSTEM: Auftrag erstellt. Agent B arbeitet daran.
+SYSTEM: Briefing erfasst. Erstelle Aufgabenplan...
+DU:    /plan
+SYSTEM: Aufgabenplan erstellt. Agent B arbeitet daran.
 DU:    /status
 SYSTEM: Agent B: Login-Seite -- 30% fertig, keine Blocker.
 ```
@@ -102,9 +114,9 @@ Agenten stellen dir Fragen. Es gibt zwei Arten:
 |-----------------|--------------------------------------|
 | `/status`       | Kurzer Ueberblick: wer macht was     |
 | `/fortschritt`  | Details: Prozent, Blocker, Zeitplan  |
-| `/briefing`     | Gesamtbild: alles auf einen Blick    |
+| `/briefing`     | Strukturiertes Briefing starten      |
 
-**Taeglich empfohlen:** Morgens `/briefing`, mittags `/status`.
+**Taeglich empfohlen:** Morgens `/status`, bei neuem Auftrag `/briefing`.
 
 ---
 
@@ -123,8 +135,8 @@ Wenn ein Agent fertig ist, bekommst du ein Review.
 
 | Command         | Was es tut                                |
 |-----------------|-------------------------------------------|
-| `/briefing`     | Gesamtueberblick anzeigen                 |
-| `/plan`         | Neuen Auftrag erstellen                   |
+| `/briefing`     | Strukturiertes Briefing starten           |
+| `/plan`         | Aufgabenplan erstellen                    |
 | `/fortschritt`  | Detaillierten Fortschritt anzeigen        |
 | `/katalog`      | Fragenkatalog oeffnen (Fragen beantworten)|
 | `/stop-alle`    | Alle Agenten anhalten                     |
@@ -132,8 +144,8 @@ Wenn ein Agent fertig ist, bekommst du ein Review.
 | `/review`       | Reviews anzeigen und freigeben            |
 | `/changelog`    | Aenderungsprotokoll anzeigen              |
 | `/status`       | Kurzer Status aller Agenten               |
-| `/profil`       | Dein Profil anzeigen/aendern              |
-| `/fragen`       | Fragen an das Team stellen                |
+| `/profil`       | Dein Profil anzeigen                      |
+| `/fragen`       | Offene Fragen anzeigen                    |
 
 ---
 
