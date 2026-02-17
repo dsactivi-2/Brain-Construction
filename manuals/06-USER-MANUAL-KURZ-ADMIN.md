@@ -45,7 +45,7 @@ Agenten, Datenbanken, Server, Einstellungen und Kosten.
 |------------------|-------------------------------------------------|
 | Agent            | Ein KI-Helfer mit einer bestimmten Aufgabe      |
 | Hook             | Automatische Regel, die im Hintergrund gilt     |
-| Brain/RAG        | Das Gedaechtnis des Systems                     |
+| Brain/RAG        | Das 6-Schichten-Gedaechtnis (siehe Abschnitt 10) |
 | MCP              | Verbindung zu externen Diensten (GitHub etc.)   |
 | Fragenkatalog    | Liste aller offenen und beantworteten Fragen    |
 
@@ -341,7 +341,44 @@ So kennt das Team immer die neueste Dokumentation.
 
 ---
 
-## 10. Datenbanken verwalten (nur Admin)
+## 10. Das Gehirn: 6 Schichten Erinnerung
+
+Dein Team vergisst NIE etwas. Es hat 6 Arten von Gedaechtnis:
+
+```
+  IMMER SICHTBAR (im Kontext):
+  ┌─────────────────────────────────────────────┐
+  │  1. Core Memory                              │
+  │     Wichtigste Fakten — immer da             │
+  │     Dein Name, Projekt, Entscheidungen       │
+  │                                              │
+  │  2. Auto-Recall                              │
+  │     Passende Erinnerungen werden             │
+  │     automatisch bei jeder Frage geladen      │
+  └─────────────────────────────────────────────┘
+
+  EXTERN (wird bei Bedarf gesucht):
+  ┌─────────────────────────────────────────────┐
+  │  3. HippoRAG 2     → Wissensgraph           │
+  │  4. Agentic RAG    → Intelligente Suche      │
+  │  5. Learning Graphs → Waechst mit der Zeit   │
+  │  6. Recall Memory   → Komplette Chat-Historie│
+  └─────────────────────────────────────────────┘
+```
+
+**Einfach gesagt:** Schicht 1+2 sind immer da (wie dein Kurzzeitgedaechtnis).
+Schicht 3-6 werden bei Bedarf geholt (wie Nachschlagen im Buch).
+
+**Befehle:**
+```
+/memory-search SUCHBEGRIFF    Erinnerungen suchen
+/memory-store "FAKT"          Einen Fakt speichern
+/memory-forget ID             Eine Erinnerung loeschen
+```
+
+---
+
+## 11. Datenbanken verwalten (nur Admin)
 
 Das System nutzt 3 Datenbanken:
 
@@ -369,7 +406,7 @@ Das System nutzt 3 Datenbanken:
 
 ---
 
-## 11. Server + Deploy (nur Admin)
+## 12. Server + Deploy (nur Admin)
 
 **Anwendung veroeffentlichen (Deploy):**
 
@@ -400,37 +437,40 @@ Das System nutzt 3 Datenbanken:
 
 ---
 
-## 12. Alle Commands (Admin)
+## 13. Alle Commands (Admin)
 
-| Command        | Was passiert                              |
-|----------------|-------------------------------------------|
-| `/briefing`    | Neuen Auftrag geben                       |
-| `/plan`        | Plan anzeigen / genehmigen                |
-| `/fortschritt` | Wie weit ist die Arbeit?                  |
-| `/katalog`     | Alle Fragen anzeigen                      |
-| `/fragen`      | Offene Fragen beantworten                 |
-| `/status`      | Status aller Agenten                      |
-| `/profil`      | Agenten-Profile anzeigen                  |
-| `/review`      | Ergebnisse pruefen                        |
-| `/changelog`   | Was wurde geaendert?                      |
-| `/stop-alle`   | ALLE Agenten sofort stoppen               |
-| `/weiter`      | Gestoppte Agenten weitermachen lassen     |
-| `/deploy`      | Anwendung veroeffentlichen                |
-| `/ci`          | Build-Pipeline anzeigen                   |
-| `/rollback`    | Letzte Version wiederherstellen           |
-| `/env`         | Umgebungsvariablen verwalten              |
-| `/server`      | Server-Status anzeigen                    |
-| `/health`      | System-Gesundheit pruefen                 |
-| `/backup`      | Sicherung erstellen                       |
-| `/db`          | Datenbanken verwalten                     |
-| `/hooks`       | Automatische Regeln verwalten             |
-| `/logs`        | Protokolle anzeigen                       |
-| `/kosten`      | Kosten-Uebersicht                         |
-| `/update`      | System aktualisieren                      |
+| Command            | Was passiert                              |
+|--------------------|-------------------------------------------|
+| `/briefing`        | Neuen Auftrag geben                       |
+| `/plan`            | Plan anzeigen / genehmigen                |
+| `/fortschritt`     | Wie weit ist die Arbeit?                  |
+| `/katalog`         | Alle Fragen anzeigen                      |
+| `/fragen`          | Offene Fragen beantworten                 |
+| `/status`          | Status aller Agenten                      |
+| `/profil`          | Agenten-Profile anzeigen                  |
+| `/review`          | Ergebnisse pruefen                        |
+| `/changelog`       | Was wurde geaendert?                      |
+| `/stop-alle`       | ALLE Agenten sofort stoppen               |
+| `/weiter`          | Gestoppte Agenten weitermachen lassen     |
+| `/deploy`          | Anwendung veroeffentlichen                |
+| `/ci`              | Build-Pipeline anzeigen                   |
+| `/rollback`        | Letzte Version wiederherstellen           |
+| `/env`             | Umgebungsvariablen verwalten              |
+| `/server`          | Server-Status anzeigen                    |
+| `/health`          | System-Gesundheit pruefen                 |
+| `/backup`          | Sicherung erstellen                       |
+| `/db`              | Datenbanken verwalten                     |
+| `/memory-search`   | Erinnerungen suchen                       |
+| `/memory-store`    | Einen Fakt speichern                      |
+| `/memory-forget`   | Eine Erinnerung loeschen                  |
+| `/hooks`           | Automatische Regeln verwalten             |
+| `/logs`            | Protokolle anzeigen                       |
+| `/kosten`          | Kosten-Uebersicht                         |
+| `/update`          | System aktualisieren                      |
 
 ---
 
-## 13. Probleme loesen
+## 14. Probleme loesen
 
 | Problem                          | Loesung                          |
 |----------------------------------|----------------------------------|

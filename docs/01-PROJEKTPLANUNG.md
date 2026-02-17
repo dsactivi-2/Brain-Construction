@@ -6,7 +6,7 @@
 Ein autonomes Multi-Agent-System fuer Claude Code das:
 - 10 spezialisierte Agenten koordiniert
 - 17 automatische Hooks ausfuehrt
-- Ein dreischichtiges Gehirn-System nutzt (HippoRAG 2 + Agentic RAG + Agentic Learning Graphs)
+- Ein sechsschichtiges Gehirn-System nutzt (Core Memory + Mem0 Auto-Recall/Capture + HippoRAG 2 + Agentic RAG + Agentic Learning Graphs + Recall Memory)
 - Lokal (Terminal) und in der Cloud (24/7) laeuft
 - Ueber Slack/WhatsApp/Linear steuerbar ist
 - Nie vergisst (persistentes Gedaechtnis ueber Sessions, Rechner und Projekte hinweg)
@@ -51,16 +51,17 @@ Ein autonomes Multi-Agent-System fuer Claude Code das:
                     ┌─────────┴─────────┐
                     ▼                   ▼
 ┌──────────────────────┐  ┌──────────────────────────────────────┐
-│   17 HOOKS           │  │   GEHIRN-SYSTEM                      │
+│   17 HOOKS           │  │   GEHIRN-SYSTEM (6 Schichten)        │
 │   (0 Tokens,         │  │                                      │
-│    laufen immer)     │  │   HippoRAG 2 (Gedaechtnis)           │
-│                      │  │   + Agentic RAG (Suchsteuerung)      │
-│   Sicherheit         │  │   + Agentic Learning Graphs          │
-│   Komprimierung      │  │     (Selbst-Erweiterung)             │
-│   Profil-Reload      │  │                                      │
-│   Regeln erzwingen   │  │   Neo4j + Vektor-DB + Redis          │
-│   Benachrichtigungen │  │   Shared ueber alle Agenten/Rechner  │
-│   Quality-Gates      │  │                                      │
+│    laufen immer)     │  │   S1: Core Memory (immer im Kontext) │
+│                      │  │   S2: Auto-Recall + Auto-Capture     │
+│   Sicherheit         │  │   S3: HippoRAG 2 (Gedaechtnis)      │
+│   Komprimierung      │  │   S4: Agentic RAG (Suchsteuerung)   │
+│   Profil-Reload      │  │   S5: Agentic Learning Graphs        │
+│   Regeln erzwingen   │  │   S6: Recall Memory (rohe Historie)  │
+│   Benachrichtigungen │  │                                      │
+│   Quality-Gates      │  │   Neo4j + Vektor-DB + Redis + SQLite │
+│                      │  │   Shared ueber alle Agenten/Rechner  │
 └──────────────────────┘  └──────────────────────────────────────┘
                                        │
                     ┌──────────────────┬┴────────────────┐
@@ -84,8 +85,8 @@ Ein autonomes Multi-Agent-System fuer Claude Code das:
 | Nr. | Rule |
 |-----|------|
 | R-00-01 | Starte nie ohne Berater-Freigabe |
-| R-00-02 | Nutze HippoRAG 2 + Agentic RAG vor jeder Aktion — zuerst DB fragen, dann erst neu generieren |
-| R-00-03 | Speichere jedes Ergebnis in DB (HippoRAG 2 + Agentic Learning Graphs) |
+| R-00-02 | Nutze das 6-Schichten Gehirn-System vor jeder Aktion — zuerst Core Memory + Mem0 + HippoRAG 2 + Agentic RAG fragen, dann erst neu generieren |
+| R-00-03 | Speichere jedes Ergebnis in DB (HippoRAG 2 + Agentic Learning Graphs + Mem0) |
 | R-00-04 | Fragen die nicht blockieren → Fragenkatalog mit 2-3 Optionen + Empfehlung + Begruendung |
 | R-00-05 | Nur bei Blockern stoppen und auf Antwort warten |
 | R-00-06 | Befolge aktive Profile und Regeln — immer |
@@ -104,7 +105,7 @@ Ein autonomes Multi-Agent-System fuer Claude Code das:
 | Command | Was |
 |---------|-----|
 | `/status` | Zeige aktuellen Agent-Status |
-| `/memory` | Suche in Wissensdatenbank (HippoRAG 2 + Agentic RAG) |
+| `/memory` | Suche in Wissensdatenbank (alle 6 Gehirn-Schichten) |
 | `/save` | Manuell in DB speichern |
 | `/fragen` | Zeige offene Fragen im Katalog |
 | `/profil` | Zeige aktive Profile |
@@ -411,66 +412,154 @@ Alle Hooks laufen automatisch, ausserhalb von Claudes Kontext, verbrauchen 0 Tok
 
 | Nr. | Hook | Matcher | Typ | Was | Kann blockieren? |
 |-----|------|---------|-----|-----|:----------------:|
-| H-01 | SessionStart | startup | command | Lade relevanten Kontext aus HippoRAG 2, verbinde mit Gehirn-System | Nein |
+| H-01 | SessionStart | startup | command | Lade core-memory.json (Schicht 1) + relevanten Kontext aus HippoRAG 2, verbinde mit Gehirn-System | Nein |
 | H-02 | SessionStart | compact | command | Lade aktive Profile neu nach Komprimierung | Nein |
 | H-03 | SessionStart | resume | command | Lade letzten Stand aus DB beim Fortsetzen | Nein |
-| H-04 | UserPromptSubmit | — | command | Route Eingabe an Berater, validiere Input | Ja |
+| H-04 | UserPromptSubmit | — | command | Route Eingabe an Berater, validiere Input + Auto-Recall: suche relevante Erinnerungen in Mem0 (Schicht 2) und injiziere in Kontext | Ja |
 | H-05 | PreToolUse | Write\|Edit | agent | Sicherheits-Check vor Code-Aenderungen | Ja |
 | H-06 | PreToolUse | Bash | agent | Gefaehrliche Befehle blockieren (rm -rf, DROP, --force) | Ja |
 | H-07 | PostToolUse | Write\|Edit | command | Regeln erzwingen + Doc-Tools ausfuehren + Ergebnis in DB | Nein |
 | H-08 | PostToolUse | Bash | command | Ergebnis pruefen + in DB speichern | Nein |
 | H-09 | PostToolUseFailure | — | command | Fehler analysieren + Korrekturhinweis an Agent | Nein |
 | H-10 | PreCompact | — | command | Kontext sichern in HippoRAG 2 bevor komprimiert wird | Nein |
-| H-11 | Stop | — | agent | Pruefen ob alle Tasks erledigt + alle Regeln eingehalten | Ja |
+| H-11 | Stop | — | agent | Pruefen ob alle Tasks erledigt + alle Regeln eingehalten + Auto-Capture: extrahiere neue Fakten und speichere in Mem0 (Schicht 2) | Ja |
 | H-12 | SubagentStart | — | command | Kontext + Profile + Sicherheitsregeln in Subagent injizieren | Nein |
 | H-13 | SubagentStop | — | agent | Qualitaets-Check der Subagent-Ausgabe | Ja |
 | H-14 | Notification | — | command | Slack/WhatsApp/Linear Benachrichtigung senden | Nein |
 | H-15 | TeammateIdle | — | agent | Quality-Gate bevor Agent pausiert | Ja |
 | H-16 | TaskCompleted | — | agent | Pruefe ob Task WIRKLICH erledigt (kein Luegen/Ueberspringen) | Ja |
-| H-17 | SessionEnd | — | command | Session-Zusammenfassung in HippoRAG 2 speichern | Nein |
+| H-17 | SessionEnd | — | command | Session-Zusammenfassung in HippoRAG 2 speichern + komplette rohe Konversationshistorie in Recall Memory speichern (Schicht 6) | Nein |
 
 ---
 
-## 5. Gehirn-System (3 Schichten)
+## 5. Gehirn-System (6 Schichten)
 
 ```
-┌─────────────────────────────────────────────────────┐
-│  Schicht 3: AGENTIC LEARNING GRAPHS                 │
-│  Agent baut eigenes Wissensnetz das mit jeder        │
-│  Interaktion waechst. Selbst-erweiternd.             │
-│                                                      │
-│  ┌─────────────────────────────────────────────────┐ │
-│  │  Schicht 2: AGENTIC RAG                         │ │
-│  │  Steuert Suche intelligent: WANN, WO, WIE       │ │
-│  │  Bewertet Ergebnisse, korrigiert sich selbst     │ │
-│  │                                                  │ │
-│  │  ┌─────────────────────────────────────────────┐ │ │
-│  │  │  Schicht 1: HIPPORAG 2                      │ │ │
-│  │  │  Wissensgraph + PageRank                     │ │ │
-│  │  │  Speichert Wissen + Beziehungen              │ │ │
-│  │  │  Vergisst nie                                │ │ │
-│  │  │  Menschenaehnliches Gedaechtnis              │ │ │
-│  │  └─────────────────────────────────────────────┘ │ │
-│  └─────────────────────────────────────────────────┘ │
-└─────────────────────────────────────────────────────┘
+┌─────────────────────────────────────────────────────────────┐
+│  Schicht 6: RECALL MEMORY                                    │
+│  Komplette rohe Konversationshistorie — nichts geht verloren │
+│  Jede Nachricht, jeder Tool-Call, jede Antwort, Zeitstempel  │
+│  Wie rohe Logdateien — PostgreSQL oder SQLite                │
+│                                                              │
+│  ┌─────────────────────────────────────────────────────────┐ │
+│  │  Schicht 5: AGENTIC LEARNING GRAPHS                     │ │
+│  │  Agent baut eigenes Wissensnetz das mit jeder            │ │
+│  │  Interaktion waechst. Selbst-erweiternd.                 │ │
+│  │                                                          │ │
+│  │  ┌─────────────────────────────────────────────────────┐ │ │
+│  │  │  Schicht 4: AGENTIC RAG                             │ │ │
+│  │  │  Steuert Suche intelligent: WANN, WO, WIE           │ │ │
+│  │  │  Bewertet Ergebnisse, korrigiert sich selbst         │ │ │
+│  │  │                                                      │ │ │
+│  │  │  ┌─────────────────────────────────────────────────┐ │ │ │
+│  │  │  │  Schicht 3: HIPPORAG 2                          │ │ │ │
+│  │  │  │  Wissensgraph + PageRank                         │ │ │ │
+│  │  │  │  Speichert Wissen + Beziehungen                  │ │ │ │
+│  │  │  │  Vergisst nie — Menschenaehnliches Gedaechtnis   │ │ │ │
+│  │  │  │                                                  │ │ │ │
+│  │  │  │  ┌─────────────────────────────────────────────┐ │ │ │ │
+│  │  │  │  │  Schicht 2: AUTO-RECALL + AUTO-CAPTURE      │ │ │ │ │
+│  │  │  │  │  (Mem0-Prinzip)                             │ │ │ │ │
+│  │  │  │  │  Auto-Recall: Vor jeder Antwort relevante   │ │ │ │ │
+│  │  │  │  │  Erinnerungen suchen + injizieren           │ │ │ │ │
+│  │  │  │  │  Auto-Capture: Nach jeder Antwort neue      │ │ │ │ │
+│  │  │  │  │  Fakten extrahieren + speichern             │ │ │ │ │
+│  │  │  │  │                                             │ │ │ │ │
+│  │  │  │  │  ┌─────────────────────────────────────────┐│ │ │ │ │
+│  │  │  │  │  │  Schicht 1: CORE MEMORY                 ││ │ │ │ │
+│  │  │  │  │  │  ~20.000 Zeichen, immer im Kontext      ││ │ │ │ │
+│  │  │  │  │  │  Wie CPU-Register / L1-Cache             ││ │ │ │ │
+│  │  │  │  │  │  Agent liest + schreibt direkt           ││ │ │ │ │
+│  │  │  │  │  └─────────────────────────────────────────┘│ │ │ │ │
+│  │  │  │  └─────────────────────────────────────────────┘ │ │ │ │
+│  │  │  └─────────────────────────────────────────────────┘ │ │ │
+│  │  └─────────────────────────────────────────────────────┘ │ │
+│  └─────────────────────────────────────────────────────────┘ │
+└─────────────────────────────────────────────────────────────┘
 
 Datenbanken:
-├── Neo4j          → Wissensgraph (Entitaeten + Beziehungen)
-├── Qdrant/ChromaDB → Vektor-Embeddings (semantische Suche)
-└── Redis           → Cache + Queue (Geschwindigkeit)
+├── Neo4j            → Wissensgraph (Entitaeten + Beziehungen)
+├── Qdrant/ChromaDB  → Vektor-Embeddings (semantische Suche)
+├── Redis            → Cache + Queue (Geschwindigkeit)
+├── PostgreSQL/SQLite→ Recall Memory (rohe Konversationshistorie)
+└── core-memory.json → Core Memory (immer geladen)
 
 Shared: Alle Agenten, alle Rechner, alle Sessions
 ```
 
+### Die 6 Schichten im Detail
+
+#### Schicht 1: Core Memory (~20.000 Zeichen, ~5.000 Tokens)
+- Immer im Context Window gepinnt, bei jedem LLM-Aufruf sichtbar
+- Agent muss NICHT suchen — Wissen ist sofort da
+- Strukturierte Bloecke: [USER], [PROJEKT], [ENTSCHEIDUNGEN], [FEHLER-LOG], [AKTUELLE-ARBEIT]
+- Agent kann lesen + schreiben (core_memory_update, core_memory_read)
+- Gespeichert in: core-memory.json
+- Geladen durch: SessionStart-Hook
+- Wie CPU-Register / L1-Cache
+
+#### Schicht 2: Auto-Recall + Auto-Capture (Mem0-Prinzip)
+- Auto-Recall: UserPromptSubmit-Hook sucht vor jeder Antwort relevante Erinnerungen und injiziert sie in den Kontext
+- Auto-Capture: Stop-Hook extrahiert nach jeder Antwort neue Fakten und speichert sie
+- Long-term Memory: User-uebergreifend, persistiert ueber alle Sessions (Name, Praeferenzen, Tech-Stack)
+- Short-term Memory: Session-spezifisch, trackt aktuelle Arbeit
+- Ueberlebt Komprimierung — wird bei jedem Turn frisch injiziert
+- 5 Agent-Tools: memory_search, memory_store, memory_list, memory_get, memory_forget
+
+#### Schicht 3: HippoRAG 2
+- Wissensgraph + Vektordatenbank
+- Neo4j + Qdrant + PersonalizedPageRank
+- Speichert Wissen + Beziehungen
+- Vergisst nie — Menschenaehnliches Gedaechtnis
+
+#### Schicht 4: Agentic RAG
+- Intelligente Suchsteuerung + Bewertung
+- Steuert Suche: WANN, WO, WIE
+- Bewertet Ergebnisse, korrigiert sich selbst
+
+#### Schicht 5: Agentic Learning Graphs
+- Selbst-erweiternd, Agent baut eigenes Wissensnetz
+- Waechst mit jeder Interaktion
+
+#### Schicht 6: Recall Memory (NEU)
+- Komplette rohe Konversationshistorie wird gespeichert
+- Jede Nachricht, jeder Tool-Call, jede Antwort, Zeitstempel
+- Automatisch durch SessionEnd-Hook
+- Agent-Tools: conversation_search, conversation_search_date
+- Wie rohe Logdateien — nichts geht verloren
+- Gespeichert in: PostgreSQL oder SQLite
+
+### Agent-Tools fuer das Gehirn-System
+```
+Core Memory (Schicht 1):
+├── core_memory_read     → Core Memory lesen
+├── core_memory_update   → Core Memory aktualisieren
+
+Mem0 (Schicht 2):
+├── memory_search   → Erinnerungen durchsuchen
+├── memory_store    → Neue Erinnerung speichern
+├── memory_list     → Alle Erinnerungen auflisten
+├── memory_get      → Bestimmte Erinnerung abrufen
+├── memory_forget   → Erinnerung loeschen
+
+Recall Memory (Schicht 6):
+├── conversation_search      → Konversationshistorie durchsuchen
+├── conversation_search_date → Konversationen nach Datum suchen
+```
+
 ### Nutzungsablauf
 ```
-Agent braucht Wissen
-  → Agentic RAG: Muss ich suchen? Wo?
-    → HippoRAG 2: Wissensgraph durchsuchen + PageRank
+Agent erhaelt Anfrage
+  → Schicht 1: Core Memory pruefen (sofort verfuegbar, 0 Latenz)
+  → Schicht 2: Auto-Recall injiziert relevante Mem0-Erinnerungen
+  → Schicht 4: Agentic RAG: Muss ich tiefer suchen? Wo?
+    → Schicht 3: HippoRAG 2: Wissensgraph durchsuchen + PageRank
       → Gefunden → Agentic RAG bewertet: Gut genug?
         → Ja → Antwort liefern (minimal Tokens)
         → Nein → Weitere Suche (Web, Code, Docs)
-  → Neues Wissen → Agentic Learning Graphs: Graph erweitern
+  → Neues Wissen → Schicht 5: Agentic Learning Graphs: Graph erweitern
+  → Schicht 2: Auto-Capture speichert neue Fakten in Mem0
+  → Schicht 6: Recall Memory speichert komplette Konversation (bei SessionEnd)
 ```
 
 ### KB-Import (Knowledge Base)
@@ -478,7 +567,7 @@ Agent braucht Wissen
 Externe Docs (Sipgate, AWS, etc.)
   → Chunking-Pipeline zerlegt in Stuecke
   → Entity-Extraktor zieht Entitaeten + Beziehungen
-  → HippoRAG 2 speichert + verbindet mit bestehendem Wissen
+  → HippoRAG 2 (Schicht 3) speichert + verbindet mit bestehendem Wissen
   → Tagging: Global oder Projekt-spezifisch (Agent entscheidet)
   → Alles durchsuchbar fuer alle Agenten
 ```

@@ -10,7 +10,8 @@ Bau- und Deploy-Anleitung fuer die Agenten die dieses System erstellen und betre
 Schritt 1: Infrastruktur (Datenbanken + Server)
     │
     ▼
-Schritt 2: Gehirn-System (HippoRAG 2 + Agentic RAG + Learning Graphs)
+Schritt 2: Gehirn-System (HippoRAG 2 + Agentic RAG + Learning Graphs
+         + Core Memory + Auto-Recall/Capture + Recall Memory)
     │
     ▼
 Schritt 3: MCP-Server (RAG-API + Doc-Scanner + Connectoren)
@@ -221,6 +222,561 @@ EOF
 ```
 
 **Abhaengigkeit:** Neo4j (Schritt 1.1) + HippoRAG 2 (Schritt 2.1)
+
+### 2.4 Core Memory (Immer-im-Kontext-Schicht)
+
+**Zweck:** Feste Speicherbloecke die bei JEDEM API-Call im System-Prompt mitgeschickt werden. Der Agent hat dadurch permanenten Zugriff auf Nutzer-Infos, Projektkontext, getroffene Entscheidungen, bekannte Fehler und die aktuelle Arbeit — ohne suchen zu muessen.
+
+**Konzept:**
+```
+┌──────────────────────────────────────────────┐
+│              CORE MEMORY (≤20.000 Zeichen)   │
+│                                              │
+│  ┌─────────────┐  ┌──────────────────────┐   │
+│  │ USER (4k)   │  │ PROJEKT (4k)         │   │
+│  │ Name, Prefs │  │ Stack, Ziele, Regeln │   │
+│  └─────────────┘  └──────────────────────┘   │
+│  ┌─────────────────┐  ┌─────────────────┐    │
+│  │ ENTSCHEID. (4k) │  │ FEHLER-LOG (4k) │    │
+│  │ Warum X, Y, Z   │  │ Bekannte Bugs   │    │
+│  └─────────────────┘  └─────────────────┘    │
+│  ┌────────────────────────┐                  │
+│  │ AKTUELLE-ARBEIT (4k)   │                  │
+│  │ Was gerade passiert     │                  │
+│  └────────────────────────┘                  │
+└──────────────────────────────────────────────┘
+```
+
+**Befehle:**
+```bash
+cd ~/claude-agent-team/brain
+mkdir -p core_memory
+
+# Core-Memory Konfiguration erstellen
+cat > core_memory/core-memory.json << 'EOF'
+{
+  "max_size_chars": 20000,
+  "blocks": {
+    "user": {
+      "label": "USER",
+      "limit": 4000,
+      "value": ""
+    },
+    "projekt": {
+      "label": "PROJEKT",
+      "limit": 4000,
+      "value": ""
+    },
+    "entscheidungen": {
+      "label": "ENTSCHEIDUNGEN",
+      "limit": 4000,
+      "value": ""
+    },
+    "fehler_log": {
+      "label": "FEHLER-LOG",
+      "limit": 4000,
+      "value": ""
+    },
+    "aktuelle_arbeit": {
+      "label": "AKTUELLE-ARBEIT",
+      "limit": 4000,
+      "value": ""
+    }
+  }
+}
+EOF
+```
+
+**Core-Memory Tools (5 Befehle fuer den Agenten):**
+
+| Tool | Beschreibung |
+|------|-------------|
+| `core_memory_append(block, inhalt)` | Fuegt Text an einen Block an |
+| `core_memory_replace(block, alt, neu)` | Ersetzt Text innerhalb eines Blocks |
+| `core_memory_remove(block, inhalt)` | Entfernt Text aus einem Block |
+| `core_memory_read(block)` | Liest einen einzelnen Block |
+| `core_memory_list()` | Zeigt alle Bloecke mit aktuellem Fuellstand |
+
+**Injection in System-Prompt:**
+```bash
+# SessionStart Hook laedt Core Memory und injiziert es
+cat > ~/.claude/hooks/core-memory-inject.sh << 'COREEOF'
+#!/bin/bash
+# Core Memory in den System-Prompt injizieren
+CORE_MEM_FILE="$HOME/claude-agent-team/brain/core_memory/core-memory.json"
+
+if [ -f "$CORE_MEM_FILE" ]; then
+  echo "=== CORE MEMORY START ==="
+  python3 -c "
+import json
+with open('$CORE_MEM_FILE') as f:
+    data = json.load(f)
+for key, block in data['blocks'].items():
+    if block['value']:
+        print(f\"<{block['label']}>\\n{block['value']}\\n</{block['label']}>\")
+"
+  echo "=== CORE MEMORY END ==="
+fi
+COREEOF
+chmod +x ~/.claude/hooks/core-memory-inject.sh
+```
+
+**Pruefung:**
+```bash
+# Core-Memory JSON validieren
+python3 -c "import json; json.load(open('core_memory/core-memory.json')); print('Core-Memory JSON: OK')"
+
+# Testblock schreiben und lesen
+python3 -c "
+import json
+f = 'core_memory/core-memory.json'
+data = json.load(open(f))
+data['blocks']['user']['value'] = 'Test-Nutzer'
+json.dump(data, open(f, 'w'), indent=2)
+print('Schreiben OK — USER Block:', data['blocks']['user']['value'])
+"
+```
+
+**Fehlerbehandlung:** JSON-Syntax-Fehler → `python3 -m json.tool core_memory/core-memory.json`
+**Rollback:** `rm -rf ~/claude-agent-team/brain/core_memory`
+
+### 2.5 Auto-Recall / Auto-Capture (Mem0-Style Schicht)
+
+**Zweck:** Automatisches Speichern und Abrufen von Erinnerungen im Hintergrund. Bei jedem Nutzer-Prompt werden relevante Erinnerungen gesucht und injiziert (Recall). Nach jeder Antwort werden neue Fakten/Entscheidungen extrahiert und gespeichert (Capture). Funktioniert wie menschliches Langzeit- und Kurzzeitgedaechtnis.
+
+**Konzept:**
+```
+Nutzer-Prompt ──► [UserPromptSubmit Hook]
+                        │
+                        ▼
+               ┌─────────────────┐
+               │  AUTO-RECALL    │
+               │  Suche relevante│
+               │  Erinnerungen   │
+               └────────┬────────┘
+                        │
+                        ▼
+               Erinnerungen werden
+               in Kontext injiziert
+                        │
+                        ▼
+               Claude generiert Antwort
+                        │
+                        ▼
+               ┌─────────────────┐
+               │  AUTO-CAPTURE   │
+               │  Extrahiere neue│
+               │  Fakten/Wissen  │
+               └────────┬────────┘
+                        │
+                        ▼
+            ┌───────────┴───────────┐
+            ▼                       ▼
+   Kurzzeit-Speicher        Langzeit-Speicher
+   (Session-Scope)          (User/Projekt-Scope)
+```
+
+**Memory-Scopes:**
+
+| Scope | Lebensdauer | Beispiel |
+|-------|-------------|---------|
+| `session` | Nur aktuelle Session | "Nutzer arbeitet gerade an Feature X" |
+| `user` | Permanent pro Nutzer | "Nutzer bevorzugt TypeScript" |
+| `projekt` | Permanent pro Projekt | "Projekt nutzt Next.js + Prisma" |
+| `global` | Permanent fuer alle | "Firmenregel: Keine var, immer const/let" |
+
+**Befehle — Auto-Recall Hook (UserPromptSubmit):**
+```bash
+cat > ~/.claude/hooks/auto-recall.sh << 'RECALLEOF'
+#!/bin/bash
+# Auto-Recall: Relevante Erinnerungen vor Antwort suchen und injizieren
+PROMPT="$1"
+BRAIN_DIR="$HOME/claude-agent-team/brain"
+
+python3 << PYEOF
+import json, sys, os
+sys.path.insert(0, "$BRAIN_DIR")
+
+from auto_memory.recall import search_memories
+
+# Semantische Suche ueber alle Memory-Scopes
+results = search_memories(
+    query="$PROMPT",
+    scopes=["session", "user", "projekt", "global"],
+    top_k=10,
+    min_score=0.6
+)
+
+if results:
+    print("=== ERINNERUNGEN (AUTO-RECALL) ===")
+    for mem in results:
+        print(f"[{mem['scope']}] {mem['text']} (Score: {mem['score']:.2f})")
+    print("=== ENDE ERINNERUNGEN ===")
+PYEOF
+RECALLEOF
+chmod +x ~/.claude/hooks/auto-recall.sh
+```
+
+**Befehle — Auto-Capture Hook (Stop):**
+```bash
+cat > ~/.claude/hooks/auto-capture.sh << 'CAPTUREEOF'
+#!/bin/bash
+# Auto-Capture: Neue Fakten/Entscheidungen nach Antwort extrahieren und speichern
+CONVERSATION="$1"
+BRAIN_DIR="$HOME/claude-agent-team/brain"
+
+python3 << PYEOF
+import json, sys
+sys.path.insert(0, "$BRAIN_DIR")
+
+from auto_memory.capture import extract_and_store
+
+# Extrahiere neue Erinnerungen aus der Konversation
+new_memories = extract_and_store(
+    conversation="$CONVERSATION",
+    extract_types=["fakt", "entscheidung", "praeferenz", "fehler", "todo"],
+    dedup=True  # Keine Duplikate speichern
+)
+
+if new_memories:
+    for mem in new_memories:
+        print(f"[GESPEICHERT] [{mem['scope']}] {mem['type']}: {mem['text']}")
+PYEOF
+CAPTUREEOF
+chmod +x ~/.claude/hooks/auto-capture.sh
+```
+
+**settings.json Erweiterung — Hooks fuer Auto-Recall/Capture:**
+```json
+{
+  "hooks": {
+    "UserPromptSubmit": [
+      {
+        "type": "command",
+        "command": "bash ~/.claude/hooks/auto-recall.sh \"$PROMPT\"",
+        "timeout": 8000
+      }
+    ],
+    "Stop": [
+      {
+        "type": "command",
+        "command": "bash ~/.claude/hooks/auto-capture.sh \"$CONVERSATION\"",
+        "timeout": 10000
+      }
+    ]
+  }
+}
+```
+
+> **Hinweis:** Diese Hooks werden zu den bestehenden `UserPromptSubmit`- und `Stop`-Hooks in Schritt 4.2 hinzugefuegt (Array erweitern, nicht ersetzen).
+
+**5 Memory-Tools (fuer manuellen Zugriff durch den Agenten):**
+
+| Tool | Beschreibung |
+|------|-------------|
+| `memory_add(text, scope, type)` | Erinnerung manuell hinzufuegen |
+| `memory_search(query, scope, top_k)` | Erinnerungen semantisch suchen |
+| `memory_delete(memory_id)` | Einzelne Erinnerung loeschen |
+| `memory_update(memory_id, new_text)` | Erinnerung aktualisieren |
+| `memory_list(scope, type, limit)` | Erinnerungen auflisten/filtern |
+
+**Auto-Memory Modul erstellen:**
+```bash
+cd ~/claude-agent-team/brain
+mkdir -p auto_memory
+
+cat > auto_memory/__init__.py << 'EOF'
+# Auto-Memory — Mem0-Style Recall + Capture
+# Automatisches Speichern und Abrufen von Erinnerungen
+# Scopes: session, user, projekt, global
+# Storage: Qdrant (Vektoren) + Redis (Session-Cache) + Neo4j (Beziehungen)
+EOF
+
+cat > auto_memory/recall.py << 'EOF'
+# Recall-Modul: Sucht relevante Erinnerungen basierend auf semantischer Aehnlichkeit
+# Wird durch UserPromptSubmit Hook automatisch aufgerufen
+# Nutzt Qdrant fuer Vektor-Suche + Redis fuer Session-Cache
+def search_memories(query: str, scopes: list, top_k: int = 10, min_score: float = 0.6):
+    pass  # Implementierung in Bau-Phase
+EOF
+
+cat > auto_memory/capture.py << 'EOF'
+# Capture-Modul: Extrahiert Fakten/Entscheidungen aus Konversation
+# Wird durch Stop Hook automatisch aufgerufen
+# Nutzt LLM fuer Extraktion + Qdrant/Neo4j fuer Speicherung
+def extract_and_store(conversation: str, extract_types: list, dedup: bool = True):
+    pass  # Implementierung in Bau-Phase
+EOF
+```
+
+**Pruefung:**
+```bash
+# Module importierbar?
+python3 -c "from auto_memory.recall import search_memories; print('Recall-Modul: OK')"
+python3 -c "from auto_memory.capture import extract_and_store; print('Capture-Modul: OK')"
+
+# Hook-Skripte ausfuehrbar?
+ls -la ~/.claude/hooks/auto-recall.sh ~/.claude/hooks/auto-capture.sh
+```
+
+**Fehlerbehandlung:** Import-Fehler → `sys.path` pruefen, `__init__.py` vorhanden?
+**Rollback:** `rm -rf ~/claude-agent-team/brain/auto_memory && rm ~/.claude/hooks/auto-recall.sh ~/.claude/hooks/auto-capture.sh`
+
+### 2.6 Recall Memory (Konversations-Archiv-Schicht)
+
+**Zweck:** Speichert JEDE abgeschlossene Konversation als Rohdaten. Ermoeglicht spaeteres Durchsuchen aller bisherigen Gespraeche nach Inhalt oder Datum. Das ist das "episodische Gedaechtnis" — der Agent kann sich an fruehere Gespraeche erinnern.
+
+**Konzept:**
+```
+Session endet ──► [SessionEnd Hook]
+                        │
+                        ▼
+               ┌─────────────────────┐
+               │  RECALL MEMORY      │
+               │  Speichere komplette│
+               │  Konversation als   │
+               │  durchsuchbares     │
+               │  Dokument           │
+               └─────────┬───────────┘
+                         │
+              ┌──────────┴──────────┐
+              ▼                     ▼
+     Qdrant (Vektoren)      SQLite/Redis
+     fuer semantische       (Metadaten:
+      Suche                  Datum, Agent,
+                             Session-ID)
+```
+
+**Datenbank-Tabelle (SQLite):**
+```bash
+cd ~/claude-agent-team/brain
+mkdir -p recall_memory
+
+cat > recall_memory/init_db.py << 'EOF'
+import sqlite3
+import os
+
+DB_PATH = os.path.join(os.path.dirname(__file__), "conversations.db")
+
+def init():
+    conn = sqlite3.connect(DB_PATH)
+    conn.execute("""
+        CREATE TABLE IF NOT EXISTS conversations (
+            id TEXT PRIMARY KEY,
+            session_id TEXT NOT NULL,
+            agent_name TEXT DEFAULT 'unknown',
+            started_at DATETIME NOT NULL,
+            ended_at DATETIME NOT NULL,
+            message_count INTEGER DEFAULT 0,
+            summary TEXT,
+            raw_conversation TEXT NOT NULL,
+            embedding_ids TEXT,
+            tags TEXT
+        )
+    """)
+    conn.execute("""
+        CREATE INDEX IF NOT EXISTS idx_conversations_date
+        ON conversations(started_at)
+    """)
+    conn.execute("""
+        CREATE INDEX IF NOT EXISTS idx_conversations_agent
+        ON conversations(agent_name)
+    """)
+    conn.commit()
+    conn.close()
+    print(f"Recall-Memory DB initialisiert: {DB_PATH}")
+
+if __name__ == "__main__":
+    init()
+EOF
+
+python3 recall_memory/init_db.py
+```
+
+**SessionEnd Hook — Konversation speichern:**
+```bash
+cat > ~/.claude/hooks/session-end-recall.sh << 'RECALLENDEOF'
+#!/bin/bash
+# Recall Memory: Komplette Konversation bei Session-Ende speichern
+BRAIN_DIR="$HOME/claude-agent-team/brain"
+
+python3 << PYEOF
+import json, sqlite3, uuid, os
+from datetime import datetime
+
+DB_PATH = os.path.join("$BRAIN_DIR", "recall_memory", "conversations.db")
+CONV_DATA = os.environ.get("CLAUDE_CONVERSATION", "")
+SESSION_ID = os.environ.get("CLAUDE_SESSION_ID", "unknown")
+AGENT_NAME = os.environ.get("CLAUDE_AGENT_NAME", "unknown")
+
+if CONV_DATA:
+    conn = sqlite3.connect(DB_PATH)
+    conv_id = str(uuid.uuid4())
+    now = datetime.now().isoformat()
+
+    conn.execute("""
+        INSERT INTO conversations (id, session_id, agent_name, started_at, ended_at, raw_conversation)
+        VALUES (?, ?, ?, ?, ?, ?)
+    """, (conv_id, SESSION_ID, AGENT_NAME, now, now, CONV_DATA))
+
+    conn.commit()
+    conn.close()
+    print(f"[RECALL] Konversation gespeichert: {conv_id}")
+else:
+    print("[RECALL] Keine Konversationsdaten — uebersprungen")
+PYEOF
+RECALLENDEOF
+chmod +x ~/.claude/hooks/session-end-recall.sh
+```
+
+> **Hinweis:** Dieser Hook wird zum bestehenden `SessionEnd`-Hook-Array in Schritt 4.2 hinzugefuegt.
+
+**settings.json Erweiterung — SessionEnd Hook:**
+```json
+{
+  "hooks": {
+    "SessionEnd": [
+      {
+        "type": "command",
+        "command": "bash ~/.claude/hooks/session-end-recall.sh",
+        "timeout": 20000
+      }
+    ]
+  }
+}
+```
+
+**Such-Tools (2 Werkzeuge fuer den Agenten):**
+
+| Tool | Beschreibung | Beispiel |
+|------|-------------|---------|
+| `conversation_search(query, limit)` | Semantische Suche ueber alle bisherigen Konversationen | `conversation_search("Docker Deployment Fehler")` |
+| `conversation_search_date(start, end, agent)` | Konversationen nach Datum und optional Agent filtern | `conversation_search_date("2026-02-01", "2026-02-17", agent="coder")` |
+
+**Such-Modul erstellen:**
+```bash
+cat > recall_memory/search.py << 'EOF'
+import sqlite3
+import os
+
+DB_PATH = os.path.join(os.path.dirname(__file__), "conversations.db")
+
+def conversation_search(query: str, limit: int = 10):
+    """Durchsucht alle gespeicherten Konversationen nach Inhalt.
+    Nutzt SQLite FTS oder Qdrant-Vektoren fuer semantische Suche."""
+    conn = sqlite3.connect(DB_PATH)
+    cursor = conn.execute("""
+        SELECT id, session_id, agent_name, started_at, summary,
+               substr(raw_conversation, 1, 500) as preview
+        FROM conversations
+        WHERE raw_conversation LIKE ?
+        ORDER BY started_at DESC
+        LIMIT ?
+    """, (f"%{query}%", limit))
+    results = cursor.fetchall()
+    conn.close()
+    return results
+
+def conversation_search_date(start: str, end: str, agent: str = None, limit: int = 20):
+    """Sucht Konversationen nach Datum (und optional Agent)."""
+    conn = sqlite3.connect(DB_PATH)
+    if agent:
+        cursor = conn.execute("""
+            SELECT id, session_id, agent_name, started_at, summary,
+                   substr(raw_conversation, 1, 500) as preview
+            FROM conversations
+            WHERE started_at BETWEEN ? AND ? AND agent_name = ?
+            ORDER BY started_at DESC
+            LIMIT ?
+        """, (start, end, agent, limit))
+    else:
+        cursor = conn.execute("""
+            SELECT id, session_id, agent_name, started_at, summary,
+                   substr(raw_conversation, 1, 500) as preview
+            FROM conversations
+            WHERE started_at BETWEEN ? AND ?
+            ORDER BY started_at DESC
+            LIMIT ?
+        """, (start, end, limit))
+    results = cursor.fetchall()
+    conn.close()
+    return results
+EOF
+
+cat > recall_memory/__init__.py << 'EOF'
+# Recall Memory — Konversations-Archiv
+# Speichert jede abgeschlossene Konversation als durchsuchbares Dokument
+# Storage: SQLite (Metadaten + Volltext) + Qdrant (Vektor-Embeddings)
+# Tools: conversation_search, conversation_search_date
+EOF
+```
+
+**Pruefung:**
+```bash
+# DB existiert und Tabelle angelegt?
+python3 -c "
+import sqlite3
+conn = sqlite3.connect('recall_memory/conversations.db')
+tables = conn.execute(\"SELECT name FROM sqlite_master WHERE type='table'\").fetchall()
+print('Tabellen:', [t[0] for t in tables])
+conn.close()
+"
+
+# Such-Modul importierbar?
+python3 -c "from recall_memory.search import conversation_search, conversation_search_date; print('Recall-Search: OK')"
+
+# Hook ausfuehrbar?
+ls -la ~/.claude/hooks/session-end-recall.sh
+```
+
+**Fehlerbehandlung:** DB-Fehler → `rm recall_memory/conversations.db && python3 recall_memory/init_db.py`
+**Rollback:** `rm -rf ~/claude-agent-team/brain/recall_memory && rm ~/.claude/hooks/session-end-recall.sh`
+
+### 2.7 Zusammenspiel der 3 neuen Gehirn-Schichten
+
+```
+┌─────────────────────────────────────────────────────────────┐
+│                    GEHIRN-SYSTEM v2                         │
+│                                                             │
+│  ┌───────────────────────────────────────────────────────┐  │
+│  │ Schicht 1: CORE MEMORY (Schritt 2.4)                 │  │
+│  │ → Immer im Kontext, sofort verfuegbar                │  │
+│  │ → 5 Bloecke, max 20k Zeichen                        │  │
+│  │ → Injection via SessionStart Hook                     │  │
+│  └───────────────────────────────────────────────────────┘  │
+│                         ▲ liest                             │
+│                         │                                   │
+│  ┌───────────────────────────────────────────────────────┐  │
+│  │ Schicht 2: AUTO-RECALL/CAPTURE (Schritt 2.5)         │  │
+│  │ → Automatisch bei jedem Prompt (Recall)              │  │
+│  │ → Automatisch nach jeder Antwort (Capture)           │  │
+│  │ → Kurzzeit + Langzeit Scopes                         │  │
+│  │ → Kann Core Memory aktualisieren                     │  │
+│  └───────────────────────────────────────────────────────┘  │
+│                         ▲ durchsucht                        │
+│                         │                                   │
+│  ┌───────────────────────────────────────────────────────┐  │
+│  │ Schicht 3: RECALL MEMORY (Schritt 2.6)               │  │
+│  │ → Komplette Konversationen archiviert                │  │
+│  │ → Durchsuchbar nach Inhalt + Datum                   │  │
+│  │ → SessionEnd Hook speichert automatisch              │  │
+│  └───────────────────────────────────────────────────────┘  │
+│                         ▲ baut auf                          │
+│                         │                                   │
+│  ┌───────────────────────────────────────────────────────┐  │
+│  │ Basis: HippoRAG 2 + Agentic RAG + Learning Graphs   │  │
+│  │ (Schritte 2.1 — 2.3)                                │  │
+│  └───────────────────────────────────────────────────────┘  │
+└─────────────────────────────────────────────────────────────┘
+```
+
+**Reihenfolge beim Setup:**
+1. Zuerst HippoRAG 2 + Agentic RAG + Learning Graphs (Schritte 2.1–2.3)
+2. Dann Core Memory (Schritt 2.4) — braucht nur Dateisystem
+3. Dann Auto-Recall/Capture (Schritt 2.5) — braucht Qdrant + Redis + Neo4j
+4. Dann Recall Memory (Schritt 2.6) — braucht SQLite + Qdrant
+
+**Alle 3 Schichten muessen konfiguriert sein BEVOR Schritt 3 (MCP-Server) beginnt.**
 
 ---
 

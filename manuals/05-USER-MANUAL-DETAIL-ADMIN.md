@@ -25,10 +25,13 @@
 | 2.9 | DevOps | 22 |
 | 2.10 | Dokumentierer | 24 |
 | 3 | Hooks | 26 |
-| 4 | Gehirn-System | 30 |
-| 4.1 | HippoRAG 2 | 30 |
-| 4.2 | Agentic RAG | 32 |
-| 4.3 | Agentic Learning Graphs | 33 |
+| 4 | Gehirn-System (6-Schichten) | 30 |
+| 4.0 | Core Memory (Schicht 1) | 30 |
+| 4.1 | Auto-Recall + Auto-Capture (Schicht 2) | 32 |
+| 4.2 | HippoRAG 2 (Schicht 3) | 34 |
+| 4.3 | Agentic RAG (Schicht 4) | 36 |
+| 4.4 | Agentic Learning Graphs (Schicht 5) | 37 |
+| 4.5 | Recall Memory (Schicht 6) | 38 |
 | 5 | Profil-System | 34 |
 | 6 | Fragenkatalog | 36 |
 | 7 | Multi-Model Routing | 38 |
@@ -51,7 +54,7 @@
 
 ### 1.1 Was ist das Cloud Code Team?
 
-Ein autonomes Multi-Agent-System bestehend aus 10 spezialisierten KI-Agenten die koordiniert zusammenarbeiten. Das System wird von einem Berater-Agenten orchestriert und nutzt ein dreischichtiges Gehirn-System fuer persistentes Gedaechtnis.
+Ein autonomes Multi-Agent-System bestehend aus 10 spezialisierten KI-Agenten die koordiniert zusammenarbeiten. Das System wird von einem Berater-Agenten orchestriert und nutzt ein 6-schichtiges Gehirn-System fuer persistentes Gedaechtnis.
 
 ### 1.2 Komponenten
 
@@ -85,7 +88,7 @@ Nutzer → [Slack/WhatsApp/Linear/Terminal]
     HOOKS (17x automatisch)
            │
            ▼
-    GEHIRN (HippoRAG 2 + Agentic RAG + Learning Graphs)
+    GEHIRN (6 Schichten: Core Memory → Auto-Recall → HippoRAG 2 → Agentic RAG → Learning Graphs → Recall Memory)
 ```
 
 ---
@@ -426,9 +429,210 @@ Alle Hooks werden in `~/.claude/settings.json` konfiguriert. Vollstaendige Konfi
 
 ---
 
-## Seite 30 — Kapitel 4: Gehirn-System
+## Seite 30 — Kapitel 4: Gehirn-System (6-Schichten)
 
-### 4.1 HippoRAG 2
+Das Gehirn-System besteht aus 6 Schichten, die zusammen ein vollstaendiges Gedaechtnis bilden:
+
+```
+┌─────────────────────────────────────────────────────────┐
+│ Schicht 1 — Core Memory          (immer im Kontext)     │
+│ Schicht 2 — Auto-Recall/Capture  (automatisch injiziert) │
+│ Schicht 3 — HippoRAG 2           (Graph + Vektoren)     │
+│ Schicht 4 — Agentic RAG          (intelligente Suche)    │
+│ Schicht 5 — Learning Graphs      (selbstlernendes Netz)  │
+│ Schicht 6 — Recall Memory        (rohe Konversationen)   │
+└─────────────────────────────────────────────────────────┘
+```
+
+### 4.0 Core Memory (Schicht 1)
+
+**Was es ist:** ~20.000 Zeichen die permanent im Kontextfenster gepinnt sind. Das Core Memory ist das Kurzzeitgedaechtnis des Systems — immer sichtbar, immer verfuegbar, ohne Suche.
+
+**5 Bloecke:**
+
+| Block | Label | Limit | Beschreibung |
+|-------|-------|:-----:|-------------|
+| 1 | USER | 4.000 Zeichen | Wer ist der Nutzer? Praeferenzen, Stil, Rolle |
+| 2 | PROJEKT | 4.000 Zeichen | Aktuelles Projekt, Tech-Stack, Ziele |
+| 3 | ENTSCHEIDUNGEN | 4.000 Zeichen | Wichtige Architektur- und Design-Entscheidungen |
+| 4 | FEHLER-LOG | 4.000 Zeichen | Bekannte Fehler, Workarounds, Lessons Learned |
+| 5 | AKTUELLE-ARBEIT | 4.000 Zeichen | Was wird gerade gemacht? Offene Tasks, Kontext |
+
+**Datenstruktur (core-memory.json):**
+
+```json
+{
+  "blocks": {
+    "USER": {
+      "label": "USER",
+      "limit": 4000,
+      "value": "Name: Max. Rolle: Senior Dev. Praeferenz: TypeScript, kurze Antworten."
+    },
+    "PROJEKT": {
+      "label": "PROJEKT",
+      "limit": 4000,
+      "value": "E-Commerce App. Stack: Next.js 15, Prisma, PostgreSQL. Ziel: MVP bis Maerz."
+    },
+    "ENTSCHEIDUNGEN": {
+      "label": "ENTSCHEIDUNGEN",
+      "limit": 4000,
+      "value": "ADR-001: App Router statt Pages Router. ADR-002: Prisma statt Drizzle."
+    },
+    "FEHLER-LOG": {
+      "label": "FEHLER-LOG",
+      "limit": 4000,
+      "value": "BUG-012: Hydration Mismatch bei dynamischem Import — Workaround: next/dynamic mit ssr:false."
+    },
+    "AKTUELLE-ARBEIT": {
+      "label": "AKTUELLE-ARBEIT",
+      "limit": 4000,
+      "value": "Feature: Warenkorb. Task: Checkout-Flow implementieren. Blocker: Payment-API Zugang fehlt."
+    }
+  }
+}
+```
+
+**So sieht es im Kontextfenster aus:**
+
+```
+═══════════════════════════════════════════════════
+ CORE MEMORY (gepinnt — immer sichtbar)
+═══════════════════════════════════════════════════
+[USER] (312/4000 Zeichen)
+Name: Max. Rolle: Senior Dev. Praeferenz: TypeScript, kurze Antworten.
+
+[PROJEKT] (487/4000 Zeichen)
+E-Commerce App. Stack: Next.js 15, Prisma, PostgreSQL. Ziel: MVP bis Maerz.
+
+[ENTSCHEIDUNGEN] (298/4000 Zeichen)
+ADR-001: App Router statt Pages Router. ADR-002: Prisma statt Drizzle.
+
+[FEHLER-LOG] (401/4000 Zeichen)
+BUG-012: Hydration Mismatch bei dynamischem Import — Workaround: next/dynamic mit ssr:false.
+
+[AKTUELLE-ARBEIT] (523/4000 Zeichen)
+Feature: Warenkorb. Task: Checkout-Flow implementieren. Blocker: Payment-API Zugang fehlt.
+═══════════════════════════════════════════════════
+```
+
+**Agent-Tools:**
+
+| Tool | Beschreibung | Parameter | Rueckgabe |
+|------|-------------|-----------|-----------|
+| `core_memory_read(block)` | Einen Block lesen | Block-Name (z.B. "USER") | Block-Inhalt als Text |
+| `core_memory_update(block, value)` | Einen Block aktualisieren | Block-Name + neuer Inhalt | Bestaetigung + Zeichenzahl |
+
+**Funktions-Registry:**
+
+| FN-ID | Funktion | Beschreibung | Parameter | Rueckgabe |
+|-------|----------|-------------|-----------|-----------|
+| FN-051 | Core Memory lesen | Einen Block aus dem Core Memory lesen | Block-Name | Block-Inhalt |
+| FN-052 | Core Memory aktualisieren | Einen Block im Core Memory ueberschreiben | Block-Name + neuer Wert | Bestaetigung |
+
+**Laden:** Der SessionStart-Hook (H-01) laedt `core-memory.json` und injiziert alle 5 Bloecke an den Anfang des Kontextfensters.
+
+**Einstellungen:**
+
+| Einstellung | Default | Beschreibung |
+|------------|---------|-------------|
+| `max_size_chars` | 20000 | Maximale Gesamtgroesse aller Bloecke |
+| `blocks` | 5 Bloecke (siehe oben) | Konfigurierbare Block-Liste mit Labels und Limits |
+| `auto_pin` | true | Automatisch an Kontextfenster-Anfang pinnen |
+| `persist_path` | `~/.claude/core-memory.json` | Speicherpfad der Core-Memory-Datei |
+
+---
+
+### 4.1 Auto-Recall + Auto-Capture (Schicht 2)
+
+**Was es ist:** Automatisches Erinnern und Lernen — ohne manuelle Suche. Das System erinnert sich proaktiv an relevantes Wissen und speichert automatisch neue Fakten.
+
+**Auto-Recall (Automatisches Erinnern):**
+
+```
+Nutzer tippt Nachricht
+       │
+       ▼
+  UserPromptSubmit-Hook (H-04)
+       │
+       ▼
+  Relevante Erinnerungen suchen
+  (Embedding-Suche ueber alle gespeicherten Fakten)
+       │
+       ▼
+  Ergebnisse in Kontext injizieren
+  (vor der eigentlichen Verarbeitung)
+       │
+       ▼
+  Agent sieht: Nutzerfrage + relevante Erinnerungen
+```
+
+- Wird bei jedem `UserPromptSubmit`-Hook automatisch ausgefuehrt
+- Sucht in Long-Term Memory (nutzer-uebergreifend, alle Sessions) und Short-Term Memory (session-spezifisch)
+- Injiziert gefundene Erinnerungen direkt in den Kontext
+- Ueberlebt Komprimierung — wird bei jedem Turn frisch injiziert
+
+**Auto-Capture (Automatisches Speichern):**
+
+```
+Agent beendet Antwort
+       │
+       ▼
+  Stop-Hook (H-11)
+       │
+       ▼
+  Neue Fakten aus Konversation extrahieren
+  (Entscheidungen, Praeferenzen, Fehler, Loesungen)
+       │
+       ▼
+  In Memory-Datenbank speichern
+  (Long-Term oder Short-Term je nach Scope)
+```
+
+- Wird bei jedem `Stop`-Hook automatisch ausgefuehrt
+- Extrahiert neue Fakten, Entscheidungen, Praeferenzen aus der Konversation
+- Speichert in Long-Term (nutzer-spezifisch, alle Sessions) oder Short-Term (nur aktuelle Session)
+
+**Scopes:**
+
+| Scope | Lebensdauer | Sichtbarkeit | Beispiel |
+|-------|-------------|-------------|---------|
+| Long-Term | Permanent (nutzer-uebergreifend) | Alle Sessions, alle Projekte | "Nutzer bevorzugt TypeScript" |
+| Short-Term | Nur aktuelle Session | Nur diese Session | "Arbeiten gerade an der Login-Seite" |
+
+**Agent-Tools:**
+
+| Tool | Beschreibung | Parameter | Rueckgabe |
+|------|-------------|-----------|-----------|
+| `memory_search(query)` | Erinnerungen durchsuchen | Suchbegriff (Text) | Liste relevanter Erinnerungen |
+| `memory_store(content, scope)` | Neue Erinnerung speichern | Inhalt + Scope (long/short) | Bestaetigung + Memory-ID |
+| `memory_list(scope)` | Alle Erinnerungen auflisten | Scope (long/short/all) | Liste aller Erinnerungen |
+| `memory_get(id)` | Einzelne Erinnerung abrufen | Memory-ID | Erinnerungs-Inhalt |
+| `memory_forget(id)` | Erinnerung loeschen | Memory-ID | Bestaetigung |
+
+**Funktions-Registry:**
+
+| FN-ID | Funktion | Beschreibung | Parameter | Rueckgabe |
+|-------|----------|-------------|-----------|-----------|
+| FN-053 | Memory durchsuchen | Erinnerungen per Suche finden | Suchbegriff | Ergebnisliste |
+| FN-054 | Memory speichern | Neue Erinnerung ablegen | Inhalt + Scope | Memory-ID |
+| FN-055 | Memory auflisten | Alle Erinnerungen zeigen | Scope-Filter | Liste |
+| FN-056 | Memory abrufen | Einzelne Erinnerung lesen | Memory-ID | Inhalt |
+| FN-057 | Memory loeschen | Erinnerung entfernen | Memory-ID | Bestaetigung |
+
+**Einstellungen:**
+
+| Einstellung | Default | Beschreibung |
+|------------|---------|-------------|
+| `auto_recall` | true | Automatisches Erinnern bei jedem Prompt |
+| `auto_capture` | true | Automatisches Speichern nach jeder Antwort |
+| `long_term_scope` | user | Scope fuer Long-Term Memory (user = nutzer-spezifisch) |
+| `short_term_scope` | session | Scope fuer Short-Term Memory (session = nur aktuelle Session) |
+| `max_recall_results` | 5 | Maximale Anzahl injizierter Erinnerungen pro Turn |
+| `capture_threshold` | 0.6 | Mindest-Relevanz fuer automatisches Speichern |
+
+---
+
+### 4.2 HippoRAG 2 (Schicht 3)
 
 **Komponenten:** Neo4j (Graph) + Qdrant (Vektoren) + PageRank
 
@@ -449,7 +653,7 @@ Alle Hooks werden in `~/.claude/settings.json` konfiguriert. Vollstaendige Konfi
 | `similarity_threshold` | 0.7 | Min. Aehnlichkeit fuer Ergebnisse |
 | `max_results` | 10 | Max. Ergebnisse pro Abfrage |
 
-### 4.2 Agentic RAG
+### 4.3 Agentic RAG (Schicht 4)
 
 Steuert die Suchstrategie intelligent:
 - Entscheidet ob Suche noetig ist
@@ -457,12 +661,75 @@ Steuert die Suchstrategie intelligent:
 - Bewertet Ergebnis-Qualitaet
 - Korrigiert bei schlechten Ergebnissen
 
-### 4.3 Agentic Learning Graphs
+### 4.4 Agentic Learning Graphs (Schicht 5)
 
 Erweitert das Wissensnetz automatisch:
 - Jede Interaktion kann neue Knoten/Kanten erzeugen
 - Graph waechst mit jeder Session
 - Naechste Abfrage profitiert von vorherigem Wissen
+
+---
+
+### 4.5 Recall Memory (Schicht 6)
+
+**Was es ist:** Vollstaendige, rohe Konversationshistorie. Jede Nachricht, jeder Tool-Aufruf, jede Antwort — alles wird mit Zeitstempel gespeichert. Nichts geht jemals verloren.
+
+**Wie es funktioniert:**
+
+```
+Session laeuft (Nachrichten, Tool-Calls, Antworten)
+       │
+       ▼
+  Alles wird mitprotokolliert
+  (Jede Nachricht + Zeitstempel + Metadaten)
+       │
+       ▼
+  SessionEnd-Hook (H-17)
+       │
+       ▼
+  Komplette Session in Datenbank speichern
+  (Strukturiert, durchsuchbar, permanent)
+```
+
+- Automatische Speicherung bei jedem `SessionEnd`-Hook (H-17)
+- Jede Nachricht enthaelt: Absender, Inhalt, Zeitstempel, Tool-Name (falls Tool-Call), Antwort
+- Ermoeglicht rueckwirkende Suche ueber alle vergangenen Konversationen
+- Keine manuelle Aktion noetig — laeuft vollstaendig im Hintergrund
+
+**Was gespeichert wird:**
+
+| Feld | Beschreibung | Beispiel |
+|------|-------------|---------|
+| `session_id` | Eindeutige Session-ID | `sess_2026-02-17_14-30` |
+| `timestamp` | Zeitstempel jeder Nachricht | `2026-02-17T14:32:05Z` |
+| `role` | Absender (user, assistant, tool) | `user` |
+| `content` | Nachrichteninhalt | "Baue eine Login-Seite" |
+| `tool_name` | Tool-Name (bei Tool-Calls) | `Write` |
+| `tool_input` | Tool-Parameter | `{"file_path": "..."}` |
+| `tool_output` | Tool-Ergebnis | `"Datei erstellt"` |
+
+**Agent-Tools:**
+
+| Tool | Beschreibung | Parameter | Rueckgabe |
+|------|-------------|-----------|-----------|
+| `conversation_search(query)` | Freitext-Suche ueber alle Konversationen | Suchbegriff (Text) | Liste passender Nachrichten mit Kontext |
+| `conversation_search_date(from, to)` | Konversationen nach Zeitraum suchen | Startdatum + Enddatum | Alle Nachrichten im Zeitraum |
+
+**Funktions-Registry:**
+
+| FN-ID | Funktion | Beschreibung | Parameter | Rueckgabe |
+|-------|----------|-------------|-----------|-----------|
+| FN-058 | Konversation suchen | Freitext-Suche in Konversationshistorie | Suchbegriff | Ergebnisliste mit Kontext |
+| FN-059 | Konversation nach Datum | Konversationen in Zeitraum finden | Von-Datum + Bis-Datum | Nachrichten im Zeitraum |
+
+**Einstellungen:**
+
+| Einstellung | Default | Beschreibung |
+|------------|---------|-------------|
+| `auto_store` | true | Automatisch bei SessionEnd speichern |
+| `store_tool_calls` | true | Tool-Aufrufe mitspeichern |
+| `max_search_results` | 20 | Max. Ergebnisse bei Konversationssuche |
+| `retention_days` | 365 | Aufbewahrungsdauer in Tagen (0 = unbegrenzt) |
 
 ---
 
@@ -948,6 +1215,15 @@ Alle Funktionen werden mit eindeutiger ID registriert.
 | FN-048 | Dokumentierer | Registry fuehren | — | FN-016/017 |
 | FN-049 | Dokumentierer | Manual erstellen | Rolle | FN-048 |
 | FN-050 | Dokumentierer | API-Docs | API-Pfad | FN-017 |
+| FN-051 | Gehirn | Core Memory lesen | Block-Name | — |
+| FN-052 | Gehirn | Core Memory aktualisieren | Block-Name + Wert | FN-051 |
+| FN-053 | Gehirn | Memory durchsuchen | Suchbegriff | — |
+| FN-054 | Gehirn | Memory speichern | Inhalt + Scope | — |
+| FN-055 | Gehirn | Memory auflisten | Scope-Filter | — |
+| FN-056 | Gehirn | Memory abrufen | Memory-ID | FN-053 |
+| FN-057 | Gehirn | Memory loeschen | Memory-ID | FN-053 |
+| FN-058 | Gehirn | Konversation suchen | Suchbegriff | — |
+| FN-059 | Gehirn | Konversation nach Datum | Von + Bis | — |
 
 ---
 
@@ -1115,6 +1391,15 @@ bash scripts/sync-setup.sh pull
 | `/registry` | Dokumentierer | FN-048 | Registry anzeigen |
 | `/manual` | Dokumentierer | FN-049 | Manual erstellen |
 | `/api-docs` | Dokumentierer | FN-050 | API-Docs generieren |
+| `/core-read` | Gehirn | FN-051 | Core Memory Block lesen |
+| `/core-update` | Gehirn | FN-052 | Core Memory Block aktualisieren |
+| `/memory-search` | Gehirn | FN-053 | Erinnerungen durchsuchen |
+| `/memory-store` | Gehirn | FN-054 | Neue Erinnerung speichern |
+| `/memory-list` | Gehirn | FN-055 | Alle Erinnerungen auflisten |
+| `/memory-get` | Gehirn | FN-056 | Einzelne Erinnerung abrufen |
+| `/memory-forget` | Gehirn | FN-057 | Erinnerung loeschen |
+| `/conv-search` | Gehirn | FN-058 | Konversationshistorie durchsuchen |
+| `/conv-search-date` | Gehirn | FN-059 | Konversationen nach Datum suchen |
 | `/status` | Alle | — | Agent-Status |
 | `/memory` | Alle | — | DB durchsuchen |
 | `/save` | Alle | — | In DB speichern |

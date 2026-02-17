@@ -43,10 +43,13 @@ Jeder Punkt muss abgehakt werden bevor das Projekt als fertig gilt.
   - [x] TeammateIdle — 2026-02-17 22:43
   - [x] TaskCompleted — 2026-02-17 22:43
   - [x] SessionEnd — 2026-02-17 22:43
-- [x] Gehirn-System definiert — 2026-02-17 22:44
-  - [x] HippoRAG 2 (Wissensgraph + Gedaechtnis) — 2026-02-17 22:44
-  - [x] Agentic RAG (Suchsteuerung + Bewertung) — 2026-02-17 22:44
-  - [x] Agentic Learning Graphs (Selbst-erweiternd) — 2026-02-17 22:44
+- [x] Gehirn-System definiert (6 Schichten) — 2026-02-17 22:44 (erweitert 04:30)
+  - [x] Schicht 1: Core Memory (immer im Kontext, ~20.000 Zeichen) — 2026-02-17 04:30
+  - [x] Schicht 2: Auto-Recall + Auto-Capture (Mem0-Prinzip) — 2026-02-17 04:30
+  - [x] Schicht 3: HippoRAG 2 (Wissensgraph + Gedaechtnis) — 2026-02-17 22:44
+  - [x] Schicht 4: Agentic RAG (Suchsteuerung + Bewertung) — 2026-02-17 22:44
+  - [x] Schicht 5: Agentic Learning Graphs (Selbst-erweiternd) — 2026-02-17 22:44
+  - [x] Schicht 6: Recall Memory (komplette Chat-Historie) — 2026-02-17 04:30
 - [x] Profil-System definiert — 2026-02-17 22:44
   - [x] Grundprofil (alle Agenten) — 2026-02-17 22:44
   - [x] Rules pro Agent — 2026-02-17 22:44

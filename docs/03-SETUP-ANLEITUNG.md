@@ -250,6 +250,282 @@ EOF
 
 ---
 
+## 2.5 Core Memory Setup (Gehirn-Schicht 1)
+
+**Wofuer:** Persistenter Kontext der IMMER im Agenten-Kontext geladen ist — wie ein Notizbuch das der Agent bei jedem Start liest.
+
+Das Core Memory besteht aus 5 Bloecken mit insgesamt 20.000 Zeichen Kapazitaet.
+
+### Datei erstellen
+
+```bash
+cat > ~/.claude/core-memory.json << 'EOF'
+{
+  "version": 1,
+  "max_total_chars": 20000,
+  "blocks": {
+    "USER": {
+      "max_chars": 4000,
+      "content": "",
+      "description": "Wer ist der Nutzer? Name, Rolle, Vorlieben, Kommunikationsstil, wichtige Kontexte"
+    },
+    "PROJEKT": {
+      "max_chars": 4000,
+      "content": "",
+      "description": "Aktuelles Projekt: Name, Stack, Architektur, wichtige Entscheidungen, Ziele"
+    },
+    "ENTSCHEIDUNGEN": {
+      "max_chars": 4000,
+      "content": "",
+      "description": "Getroffene Architektur- und Design-Entscheidungen mit Begruendung (WARUM so und nicht anders)"
+    },
+    "FEHLER-LOG": {
+      "max_chars": 4000,
+      "content": "",
+      "description": "Bekannte Fehler, Workarounds, Was-nicht-funktioniert-hat — damit der Agent sie nicht wiederholt"
+    },
+    "AKTUELLE-ARBEIT": {
+      "max_chars": 4000,
+      "content": "",
+      "description": "Was wird gerade gemacht? Offene Tasks, naechste Schritte, Blocker — wird bei jedem SessionEnd aktualisiert"
+    }
+  }
+}
+EOF
+```
+
+### Bloecke erklaert
+
+| Block | Was kommt rein | Beispiel |
+|-------|---------------|----------|
+| **USER** | Nutzer-Infos, Vorlieben, Stil | "Nutzer: Max, bevorzugt TypeScript, will immer Tests" |
+| **PROJEKT** | Projekt-Kontext, Stack, Ziele | "Projekt: SaaS App, Next.js + Supabase, MVP bis Q2" |
+| **ENTSCHEIDUNGEN** | Architektur-Entscheidungen + Gruende | "Entscheidung: Kein ORM → weil direkte SQL-Queries schneller" |
+| **FEHLER-LOG** | Fehler + Workarounds | "Bug: Redis Timeout bei >1MB Payload → Chunking nutzen" |
+| **AKTUELLE-ARBEIT** | Laufende Tasks + naechste Schritte | "Aktuell: Auth-System implementieren, Blocker: OAuth Config" |
+
+### Wie es funktioniert
+
+- **SessionStart Hook (H-01)** laedt `core-memory.json` automatisch in den Kontext
+- Jeder Agent sieht beim Start sofort alle 5 Bloecke
+- Bloecke werden durch Agenten aktualisiert (z.B. bei SessionEnd)
+- **Limit:** Jeder Block max 4.000 Zeichen, gesamt max 20.000 Zeichen
+- **Speicherort:** `~/.claude/core-memory.json`
+
+---
+
+## 2.6 Auto-Recall/Capture Setup — Mem0-Prinzip (Gehirn-Schicht 2)
+
+**Wofuer:** Automatisches Erinnern und Speichern von Fakten — wie ein Langzeitgedaechtnis das im Hintergrund arbeitet. Basiert auf dem Mem0-Prinzip.
+
+### Option A: Mem0 Cloud (einfachster Weg)
+
+```
+1. Account erstellen: https://app.mem0.ai
+2. API Key generieren: Dashboard → API Keys → "Create Key"
+3. API Key kopieren
+```
+
+**Konfiguration:**
+```bash
+cat > ~/.claude/config/memory.json << 'EOF'
+{
+  "mem0": {
+    "provider": "cloud",
+    "api_key": "m0-DEIN_MEM0_API_KEY",
+    "org_id": "DEINE_ORG_ID",
+    "project_id": "DEIN_PROJEKT_ID"
+  },
+  "auto_recall": true,
+  "auto_capture": true,
+  "scopes": {
+    "long_term": "user",
+    "short_term": "session"
+  }
+}
+EOF
+```
+
+### Option B: Self-Hosted mit Qdrant + Ollama (volle Kontrolle)
+
+Du hast Qdrant bereits (Abschnitt 2.2). Zusaetzlich brauchst du Ollama fuer lokale Embeddings:
+
+```bash
+# Ollama installieren (fuer lokale Embeddings)
+docker run -d \
+  --name ollama \
+  --restart always \
+  -p 11434:11434 \
+  -v ollama-data:/root/.ollama \
+  ollama/ollama:latest
+
+# Embedding-Modell herunterladen
+docker exec ollama ollama pull nomic-embed-text
+```
+
+**Konfiguration fuer Self-Hosted:**
+```bash
+cat > ~/.claude/config/memory.json << 'EOF'
+{
+  "mem0": {
+    "provider": "self-hosted",
+    "vector_store": {
+      "provider": "qdrant",
+      "url": "http://localhost:6333",
+      "collection": "mem0_memories"
+    },
+    "embedder": {
+      "provider": "ollama",
+      "url": "http://localhost:11434",
+      "model": "nomic-embed-text"
+    }
+  },
+  "auto_recall": true,
+  "auto_capture": true,
+  "scopes": {
+    "long_term": "user",
+    "short_term": "session"
+  }
+}
+EOF
+```
+
+### Einstellungen erklaert
+
+| Einstellung | Wert | Warum |
+|------------|------|-------|
+| `auto_recall` | true | **UserPromptSubmit Hook (H-04)** sucht automatisch relevante Erinnerungen und injiziert sie in den Kontext |
+| `auto_capture` | true | **Stop Hook (H-11)** extrahiert automatisch neue Fakten aus der Antwort und speichert sie |
+| `long_term` Scope | user | Erinnerungen gelten nutzer-weit — ueber alle Sessions und Projekte hinweg |
+| `short_term` Scope | session | Temporaere Erinnerungen nur fuer die aktuelle Session |
+
+### Agent-Tools (5 Werkzeuge)
+
+Die folgenden Tools stehen allen Agenten automatisch zur Verfuegung:
+
+| Tool | Funktion | Beispiel |
+|------|----------|---------|
+| `memory_search` | Semantische Suche in Erinnerungen | `memory_search("Redis Konfiguration")` |
+| `memory_store` | Neue Erinnerung speichern | `memory_store("Redis max 512MB fuer Light Setup")` |
+| `memory_list` | Alle Erinnerungen auflisten (gefiltert) | `memory_list(scope="long_term", limit=20)` |
+| `memory_get` | Einzelne Erinnerung abrufen per ID | `memory_get("mem_abc123")` |
+| `memory_forget` | Erinnerung loeschen (veraltet/falsch) | `memory_forget("mem_abc123")` |
+
+### Verbindung testen
+
+```bash
+# Mem0 Cloud:
+curl -H "Authorization: Token m0-DEIN_KEY" https://api.mem0.ai/v1/memories/
+
+# Self-Hosted (Qdrant Collection pruefen):
+curl http://localhost:6333/collections/mem0_memories
+```
+
+---
+
+## 2.7 Recall Memory Setup (Gehirn-Schicht 6)
+
+**Wofuer:** Speichert die komplette rohe Konversationshistorie — jede Nachricht, jeder Tool-Call, jede Session. Fuer spaetere Analyse und Suche.
+
+### Option A: PostgreSQL (Docker) — empfohlen fuer Produktion
+
+```bash
+docker run -d \
+  --name recall-db \
+  --restart always \
+  -p 5432:5432 \
+  -e POSTGRES_DB=recall_memory \
+  -e POSTGRES_USER=recall \
+  -e POSTGRES_PASSWORD=DEIN_SICHERES_PASSWORT \
+  -v recall-data:/var/lib/postgresql/data \
+  postgres:16-alpine
+```
+
+**Tabellen-Struktur erstellen:**
+```bash
+docker exec -i recall-db psql -U recall -d recall_memory << 'SQL'
+CREATE TABLE IF NOT EXISTS conversations (
+  id            SERIAL PRIMARY KEY,
+  session_id    VARCHAR(64) NOT NULL,
+  timestamp     TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+  role          VARCHAR(16) NOT NULL,   -- 'user', 'assistant', 'system', 'tool'
+  content       TEXT,
+  tool_calls    JSONB,                  -- Tool-Aufrufe als JSON (nullable)
+  metadata      JSONB                   -- Zusaetzliche Metadaten (Agent-Name, Projekt, etc.)
+);
+
+CREATE INDEX idx_conversations_session ON conversations(session_id);
+CREATE INDEX idx_conversations_timestamp ON conversations(timestamp);
+CREATE INDEX idx_conversations_role ON conversations(role);
+CREATE INDEX idx_conversations_content_search ON conversations USING gin(to_tsvector('german', content));
+SQL
+```
+
+**Verbindung in Config:**
+```yaml
+recall_memory:
+  provider: postgresql
+  host: localhost
+  port: 5432
+  database: recall_memory
+  user: recall
+  password: DEIN_SICHERES_PASSWORT
+```
+
+### Option B: SQLite (einfacher, fuer Einzelnutzer)
+
+```bash
+# Keine Installation noetig — SQLite ist ueberall verfuegbar
+mkdir -p ~/.claude/data
+
+# Datei wird automatisch erstellt bei erstem Zugriff:
+# ~/.claude/data/recall-memory.sqlite
+```
+
+**Verbindung in Config:**
+```yaml
+recall_memory:
+  provider: sqlite
+  path: ~/.claude/data/recall-memory.sqlite
+```
+
+### Wie es funktioniert
+
+- **SessionEnd Hook (H-17)** speichert automatisch die komplette Konversation
+- Jede Nachricht wird einzeln mit Zeitstempel gespeichert
+- Tool-Calls werden als JSON in der `tool_calls` Spalte gespeichert
+- Volltextsuche ueber `content` moeglich (PostgreSQL: German Stemming)
+
+### Tabellen-Struktur erklaert
+
+| Spalte | Typ | Beschreibung |
+|--------|-----|-------------|
+| `session_id` | VARCHAR(64) | Eindeutige Session-ID — gruppiert alle Nachrichten einer Session |
+| `timestamp` | TIMESTAMPTZ | Zeitpunkt der Nachricht |
+| `role` | VARCHAR(16) | Wer hat gesprochen: `user`, `assistant`, `system`, `tool` |
+| `content` | TEXT | Der eigentliche Nachrichteninhalt |
+| `tool_calls` | JSONB | Tool-Aufrufe und deren Ergebnisse (nur bei Assistant-Nachrichten) |
+| `metadata` | JSONB | Zusaetzliche Infos: Agent-Name, Projekt-ID, Tags |
+
+### Agent-Tools (2 Werkzeuge)
+
+| Tool | Funktion | Beispiel |
+|------|----------|---------|
+| `conversation_search(query)` | Volltextsuche ueber alle gespeicherten Konversationen | `conversation_search("Redis Timeout Problem")` |
+| `conversation_search_date(from, to)` | Konversationen in einem Zeitraum finden | `conversation_search_date("2026-02-01", "2026-02-17")` |
+
+### Verbindung testen
+
+```bash
+# PostgreSQL:
+docker exec recall-db psql -U recall -d recall_memory -c "SELECT COUNT(*) FROM conversations;"
+
+# SQLite:
+sqlite3 ~/.claude/data/recall-memory.sqlite "SELECT COUNT(*) FROM conversations;"
+```
+
+---
+
 ## 3. Docker + Docker Compose Setup
 
 ### Installation
@@ -504,7 +780,24 @@ docs.deinedomain.com {
 
 ---
 
-## 10. Checkliste: Was DU einrichten musst
+## 10. Gehirn-System Uebersicht (6 Schichten)
+
+Das vollstaendige Gehirn-System besteht aus 6 Schichten:
+
+| Schicht | Name | Setup-Abschnitt | Speicher | Zweck |
+|:-------:|------|:---------:|----------|-------|
+| **S1** | Core Memory | 2.5 | JSON-Datei | Persistenter Kontext — immer im Agenten-Kontext geladen |
+| **S2** | Auto-Recall/Capture (Mem0) | 2.6 | Qdrant / Mem0 Cloud | Automatisches Erinnern + Speichern von Fakten |
+| **S3** | HippoRAG 2 | 2.1 + 2.2 | Neo4j + Qdrant | Wissensgraph + PageRank — strukturiertes Langzeitwissen |
+| **S4** | Agentic RAG | — (automatisch) | — | Intelligente Suche-Steuerung: WANN, WO, WIE suchen |
+| **S5** | Agentic Learning Graphs | — (automatisch) | Neo4j | Agent baut eigenes Wissensnetz — selbst-erweiternd |
+| **S6** | Recall Memory | 2.7 | PostgreSQL / SQLite | Komplette rohe Konversationshistorie |
+
+**Schichten S4 und S5** erfordern kein eigenes Setup — sie nutzen die bestehenden Datenbanken (Neo4j, Qdrant) und werden durch die Agenten-Logik automatisch gesteuert.
+
+---
+
+## 11. Checkliste: Was DU einrichten musst
 
 | # | Was | Wo | Wann |
 |---|-----|-----|------|
@@ -512,13 +805,16 @@ docs.deinedomain.com {
 | 2 | Docker installieren | Server/lokal | Vor Datenbanken |
 | 3 | Neo4j Passwort waehlen | .env Datei | Vor DB-Start |
 | 4 | Redis Passwort waehlen | .env Datei | Vor DB-Start |
-| 5 | Claude API Key erstellen | console.anthropic.com | Vor Agent-Start |
-| 6 | GitHub Token erstellen | github.com/settings/tokens | Fuer GitHub-Connector |
-| 7 | Notion Token erstellen | notion.so/my-integrations | Fuer Notion-Connector |
-| 8 | Slack Webhook erstellen | api.slack.com/apps | Fuer Benachrichtigungen |
-| 9 | WhatsApp Business (optional) | business.facebook.com | Fuer mobile Steuerung |
-| 10 | Linear Account (optional) | linear.app | Fuer Task-Management |
-| 11 | GitHub Repo erstellen | github.com/new | Fuer Code + Sync |
-| 12 | DNS + Domain (optional) | cloudflare.com | Nur fuer Cloud mit Domain |
+| 5 | Core Memory erstellen | ~/.claude/core-memory.json | Vor Agent-Start |
+| 6 | Mem0 einrichten (Cloud oder Self-Hosted) | ~/.claude/config/memory.json | Vor Agent-Start |
+| 7 | Recall Memory DB starten | Docker (PostgreSQL) oder SQLite | Vor Agent-Start |
+| 8 | Claude API Key erstellen | console.anthropic.com | Vor Agent-Start |
+| 9 | GitHub Token erstellen | github.com/settings/tokens | Fuer GitHub-Connector |
+| 10 | Notion Token erstellen | notion.so/my-integrations | Fuer Notion-Connector |
+| 11 | Slack Webhook erstellen | api.slack.com/apps | Fuer Benachrichtigungen |
+| 12 | WhatsApp Business (optional) | business.facebook.com | Fuer mobile Steuerung |
+| 13 | Linear Account (optional) | linear.app | Fuer Task-Management |
+| 14 | GitHub Repo erstellen | github.com/new | Fuer Code + Sync |
+| 15 | DNS + Domain (optional) | cloudflare.com | Nur fuer Cloud mit Domain |
 
 Alles andere machen die Agenten automatisch.
