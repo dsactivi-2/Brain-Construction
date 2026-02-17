@@ -33,7 +33,7 @@ claude --version       # Claude Code CLI installiert
 
 #### Schritt 1: Repo klonen
 ```bash
-cd ~/Desktop
+cd ~
 git clone https://github.com/DEIN-USER/claude-agent-team.git
 cd claude-agent-team
 ```
@@ -48,7 +48,7 @@ pip install -r requirements.txt
 #### Schritt 3: Datenbanken starten
 ```bash
 # Docker Desktop muss laufen!
-docker compose up -d neo4j qdrant redis
+docker compose up -d neo4j qdrant redis recall-db
 # Warten bis alle Container laufen:
 docker compose ps
 ```
@@ -72,8 +72,8 @@ bash scripts/install.sh
 > **Hinweis:** Fuer lokale Entwicklung werden MCP-Server direkt ueber `claude mcp add` gestartet. Docker-basierte MCP-Server (`docker compose up -d rag-api doc-scanner`) sind nur fuer die Cloud-Variante (Teil B) vorgesehen.
 
 ```bash
-claude mcp add rag-api -- python3 ~/Desktop/claude-agent-team/mcp-servers/rag-api/server.py
-claude mcp add doc-scanner -- python3 ~/Desktop/claude-agent-team/mcp-servers/doc-scanner/server.py
+claude mcp add rag-api -- python3 ~/claude-agent-team/mcp-servers/rag-api/server.py
+claude mcp add doc-scanner -- python3 ~/claude-agent-team/mcp-servers/doc-scanner/server.py
 claude mcp add github -- npx @modelcontextprotocol/server-github
 claude mcp add notion -- npx @modelcontextprotocol/server-notion
 ```
@@ -164,7 +164,7 @@ claude --version       # Claude Code CLI
 
 #### Schritt 1: Repo klonen
 ```bash
-cd ~/Desktop
+cd ~
 git clone https://github.com/DEIN-USER/claude-agent-team.git
 cd claude-agent-team
 ```
@@ -179,7 +179,7 @@ pip install -r requirements.txt
 #### Schritt 3: Datenbanken starten
 ```bash
 # Docker Desktop starten (aus Applications)
-docker compose up -d neo4j qdrant redis
+docker compose up -d neo4j qdrant redis recall-db
 docker compose ps   # Alle "Up"?
 ```
 
@@ -201,8 +201,8 @@ chmod +x ~/.claude/hooks/*.sh
 > **Hinweis:** Fuer lokale Entwicklung werden MCP-Server direkt ueber `claude mcp add` gestartet. Docker-basierte MCP-Server sind nur fuer die Cloud-Variante (Teil B) vorgesehen.
 
 ```bash
-claude mcp add rag-api -- python3 ~/Desktop/claude-agent-team/mcp-servers/rag-api/server.py
-claude mcp add doc-scanner -- python3 ~/Desktop/claude-agent-team/mcp-servers/doc-scanner/server.py
+claude mcp add rag-api -- python3 ~/claude-agent-team/mcp-servers/rag-api/server.py
+claude mcp add doc-scanner -- python3 ~/claude-agent-team/mcp-servers/doc-scanner/server.py
 claude mcp add github -- npx @modelcontextprotocol/server-github
 claude mcp add notion -- npx @modelcontextprotocol/server-notion
 ```
@@ -347,8 +347,8 @@ ssh -L 8100:localhost:8100 \
 
 # 2. In einem neuen Terminal: MCP-Server lokal registrieren
 #    (die Tunnel leiten die Verbindung zum Server weiter)
-claude mcp add rag-api -- python3 ~/Desktop/claude-agent-team/mcp-servers/rag-api/server.py
-claude mcp add doc-scanner -- python3 ~/Desktop/claude-agent-team/mcp-servers/doc-scanner/server.py
+claude mcp add rag-api -- python3 ~/claude-agent-team/mcp-servers/rag-api/server.py
+claude mcp add doc-scanner -- python3 ~/claude-agent-team/mcp-servers/doc-scanner/server.py
 claude mcp add github -- npx @modelcontextprotocol/server-github
 claude mcp add notion -- npx @modelcontextprotocol/server-notion
 ```
@@ -567,5 +567,5 @@ bash scripts/health-check.sh
 | Dokument | Beschreibung |
 |----------|-------------|
 | [01-PROJEKTPLANUNG.md](01-PROJEKTPLANUNG.md) | Gesamtarchitektur, Agenten-Rollen, Hook-System, Gehirn-Schichten |
-| [02-RUNBOOK.md](02-RUNBOOK.md) | Betriebshandbuch — Wartung, Troubleshooting, Monitoring-Prozesse |
+| [02-RUNBOOK.md](02-RUNBOOK.md) | Bau- und Deploy-Anleitung — Befehle, Konfiguration, Reihenfolge |
 | [03-SETUP-ANLEITUNG.md](03-SETUP-ANLEITUNG.md) | Detailliertes Setup aller Datenbanken, MCP-Server, Gehirn-Schichten |

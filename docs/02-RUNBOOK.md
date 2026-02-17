@@ -140,7 +140,34 @@ docker exec -it redis redis-cli -a SICHERES_PASSWORT ping
 **Fehlerbehandlung:** `docker logs redis` pruefen
 **Rollback:** `docker stop redis && docker rm redis`
 
-### 1.4 Abhaengigkeiten zwischen Datenbanken
+### 1.4 PostgreSQL (Recall Memory)
+
+**Zweck:** Recall Memory — Speichert komplette Konversationshistorie (Schicht 6)
+
+> **Hinweis:** Fuer lokales Entwickeln kann statt PostgreSQL auch SQLite verwendet werden (siehe Schritt 2.6). PostgreSQL wird fuer den produktiven Docker-Compose Betrieb empfohlen (Schritt 10).
+
+**Befehle:**
+```bash
+# Docker Container starten
+docker run -d \
+  --name recall-db \
+  --restart always \
+  -p 5432:5432 \
+  -e POSTGRES_DB=recall_memory \
+  -e POSTGRES_USER=recall_user \
+  -e POSTGRES_PASSWORD=SICHERES_PASSWORT \
+  -v recall-data:/var/lib/postgresql/data \
+  postgres:16-alpine
+
+# Verbindung testen
+docker exec recall-db pg_isready -U recall_user -d recall_memory
+```
+
+**Pruefung:** `pg_isready` gibt "accepting connections" zurueck
+**Fehlerbehandlung:** Port belegt → `docker ps` pruefen, alten Container stoppen
+**Rollback:** `docker stop recall-db && docker rm recall-db`
+
+### 1.5 Abhaengigkeiten zwischen Datenbanken
 
 ```
 Neo4j       → Unabhaengig, kann zuerst starten
@@ -832,7 +859,7 @@ ls -la ~/.claude/hooks/session-end-recall.sh
 3. Dann Auto-Recall/Capture (Schritt 2.5) — braucht Qdrant + Redis + Neo4j
 4. Dann Recall Memory (Schritt 2.6) — braucht SQLite + Qdrant
 
-**Alle 3 Schichten muessen konfiguriert sein BEVOR Schritt 3 (MCP-Server) beginnt.**
+**Der gesamte Schritt 2 (alle 6 Gehirn-Schichten) muss abgeschlossen sein BEVOR Schritt 3 (MCP-Server) beginnt.**
 
 > **Siehe auch:** 01-PROJEKTPLANUNG.md Abschnitt Gehirn-System fuer die vollstaendige Schichten-Architektur. 03-SETUP-ANLEITUNG.md fuer detaillierte Konfigurationseinstellungen.
 
@@ -851,12 +878,16 @@ mkdir -p mcp-servers/rag-api
 
 cat > mcp-servers/rag-api/server.py << 'EOF'
 # MCP Server fuer HippoRAG 2 + Agentic RAG
-# Tools:
-#   - memory_store: Wissen speichern
-#   - memory_search: Wissen suchen (semantisch + Graph)
-#   - memory_connect: Beziehung zwischen Entitaeten erstellen
-#   - cache_get: Cached Ergebnis abrufen
-#   - cache_set: Ergebnis cachen
+# Tools (kanonische Namen — siehe 01-PROJEKTPLANUNG.md FN-051 bis FN-059):
+#   - memory_store: Erinnerung speichern
+#   - memory_search: Erinnerungen durchsuchen (semantisch + Graph)
+#   - memory_list: Erinnerungen auflisten/filtern
+#   - memory_get: Einzelne Erinnerung abrufen
+#   - memory_forget: Erinnerung loeschen
+#   - core_memory_read: Core Memory lesen
+#   - core_memory_update: Core Memory aktualisieren
+#   - conversation_search: Konversationen durchsuchen
+#   - conversation_search_date: Konversationen nach Datum suchen
 EOF
 
 # Server starten

@@ -122,7 +122,7 @@ Nutzer → [Slack/WhatsApp/Linear/Terminal]
 | Command | FN-ID | Syntax | Beispiel |
 |---------|-------|--------|---------|
 | `/briefing` | FN-001 | `/briefing` | `/briefing` |
-| `/plan` | FN-002 | `/plan` | `/plan` |
+| `/plan` | FN-003 | `/plan` | `/plan` |
 | `/delegate` | FN-004 | `/delegate AGENT TASK` | `/delegate coder "Login-Seite bauen"` |
 | `/katalog` | FN-006 | `/katalog [filter]` | `/katalog blocker` |
 | `/fortschritt` | FN-005 | `/fortschritt` | `/fortschritt` |
@@ -339,6 +339,9 @@ Nutzer → [Slack/WhatsApp/Linear/Terminal]
 | `/scan-list` | FN-037 | `/scan-list` |
 | `/scan-add` | FN-038 | `/scan-add URL [global\|projekt]` |
 | `/scan-diff` | FN-039 | `/scan-diff URL` |
+| `/scan-remove` | FN-061 | `/scan-remove URL\|NUMMER` |
+| `/scan-edit` | FN-062 | `/scan-edit URL\|NUMMER --PARAM WERT` |
+| `/scan-config` | FN-063 | `/scan-config [KEY [VALUE]]` |
 | `/kb-import` | FN-040 | `/kb-import PFAD [global\|projekt]` |
 
 ---
@@ -990,7 +993,7 @@ Tags: react(1), frontend(2), api(2), backend(1), css(1), design(1), intern(1)
        │
        ▼
   ┌─────────────────┐
-  │ Seite abrufen    │ ← Cheerio (statisch) oder Puppeteer (JavaScript)
+  │ Seite abrufen    │ ← BeautifulSoup (statisch) oder Playwright (JavaScript)
   └────────┬────────┘
            │
            ▼
@@ -1397,7 +1400,7 @@ bash scripts/sync-setup.sh pull
 | Command | Agent | FN-ID | Beschreibung |
 |---------|-------|-------|-------------|
 | `/briefing` | Berater | FN-001 | Strukturiertes Briefing starten |
-| `/plan` | Berater | FN-002 | Aufgabenplan erstellen |
+| `/plan` | Berater | FN-003 | Aufgabenplan erstellen |
 | `/delegate` | Berater | FN-004 | Task an Agent zuweisen |
 | `/katalog` | Berater | FN-006 | Fragenkatalog anzeigen |
 | `/fortschritt` | Berater | FN-005 | Status aller Agenten |
@@ -1456,7 +1459,7 @@ bash scripts/sync-setup.sh pull
 | `/conv-search` | Gehirn | FN-058 | Konversationshistorie durchsuchen |
 | `/conv-search-date` | Gehirn | FN-059 | Konversationen nach Datum suchen |
 | `/status` | Alle | System-Command | Agent-Status anzeigen |
-| `/memory` | Alle | FN-053 | Alias fuer /memory-search |
+| `/memory` | Alle | System-Command | Suche in allen Gehirn-Schichten |
 | `/save` | Alle | System-Command | Aktuellen Kontext in Datenbank speichern |
 | `/fragen` | Alle | System-Command | Offene Fragen anzeigen |
 | `/profil` | Alle | System-Command | Aktive Profile anzeigen |

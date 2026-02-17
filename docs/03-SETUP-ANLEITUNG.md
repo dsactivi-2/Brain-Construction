@@ -457,7 +457,7 @@ docker run -d \
   --restart always \
   -p 5432:5432 \
   -e POSTGRES_DB=recall_memory \
-  -e POSTGRES_USER=recall \
+  -e POSTGRES_USER=recall_user \
   -e POSTGRES_PASSWORD=DEIN_SICHERES_PASSWORT \
   -v recall-data:/var/lib/postgresql/data \
   postgres:16-alpine
@@ -465,7 +465,7 @@ docker run -d \
 
 **Tabellen-Struktur erstellen:**
 ```bash
-docker exec -i recall-db psql -U recall -d recall_memory << 'SQL'
+docker exec -i recall-db psql -U recall_user -d recall_memory << 'SQL'
 CREATE TABLE IF NOT EXISTS conversations (
   id            SERIAL PRIMARY KEY,
   session_id    VARCHAR(64) NOT NULL,
@@ -490,7 +490,7 @@ recall_memory:
   host: localhost
   port: 5432
   database: recall_memory
-  user: recall
+  user: recall_user
   password: DEIN_SICHERES_PASSWORT
 ```
 
@@ -540,7 +540,7 @@ recall_memory:
 
 ```bash
 # PostgreSQL:
-docker exec recall-db psql -U recall -d recall_memory -c "SELECT COUNT(*) FROM conversations;"
+docker exec recall-db psql -U recall_user -d recall_memory -c "SELECT COUNT(*) FROM conversations;"
 
 # SQLite:
 sqlite3 ~/.claude/data/recall-memory.sqlite "SELECT COUNT(*) FROM conversations;"
@@ -587,13 +587,13 @@ docker compose version  # Docker Compose 2+ erwartet
 
 ```bash
 # In Claude Code:
-claude mcp add rag-api -- python3 ~/Desktop/claude-agent-team/mcp-servers/rag-api/server.py
+claude mcp add rag-api -- python3 ~/claude-agent-team/mcp-servers/rag-api/server.py
 ```
 
 ### 4.2 Doc-Scanner Server registrieren
 
 ```bash
-claude mcp add doc-scanner -- python3 ~/Desktop/claude-agent-team/mcp-servers/doc-scanner/server.py
+claude mcp add doc-scanner -- python3 ~/claude-agent-team/mcp-servers/doc-scanner/server.py
 ```
 
 ### 4.3 GitHub Connector
@@ -858,5 +858,5 @@ Alles andere machen die Agenten automatisch.
 | Dokument | Beschreibung |
 |----------|-------------|
 | [01-PROJEKTPLANUNG.md](01-PROJEKTPLANUNG.md) | Gesamtarchitektur, Agenten-Rollen, Hook-System, Gehirn-Schichten |
-| [02-RUNBOOK.md](02-RUNBOOK.md) | Betriebshandbuch — Wartung, Troubleshooting, Monitoring-Prozesse |
+| [02-RUNBOOK.md](02-RUNBOOK.md) | Bau- und Deploy-Anleitung — Befehle, Konfiguration, Reihenfolge |
 | [04-INSTALLATIONS-GUIDE.md](04-INSTALLATIONS-GUIDE.md) | Schritt-fuer-Schritt Installation fuer Windows, Mac und Cloud |

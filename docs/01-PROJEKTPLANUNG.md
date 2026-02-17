@@ -143,7 +143,7 @@ Ein autonomes Multi-Agent-System fuer Claude Code das:
 | `/katalog` | Zeige Fragenkatalog |
 | `/fortschritt` | Zeige Status aller Agenten |
 | `/stop-alle` | Alle Agenten stoppen |
-| `/weiter` | Arbeit fortsetzen nach Blocker |
+| `/weiter` | Naechsten Schritt ausfuehren |
 
 ---
 
@@ -326,6 +326,9 @@ Ein autonomes Multi-Agent-System fuer Claude Code das:
 | `/scan-list` | Zeige alle ueberwachten URLs |
 | `/scan-add` | Neue URL hinzufuegen (mit Global/Projekt Markierung) |
 | `/scan-diff` | Aenderungen seit letztem Scan zeigen |
+| `/scan-remove` | URL aus Scan-Liste entfernen |
+| `/scan-edit` | URL-Einstellungen aendern |
+| `/scan-config` | Scanner-Konfiguration anzeigen/aendern |
 | `/kb-import` | Doku-Pfad direkt in KB importieren |
 
 #### Technische Komponenten
@@ -412,9 +415,9 @@ Alle Hooks laufen automatisch. Command-type Hooks laufen ausserhalb von Claudes 
 
 | Nr. | Hook | Matcher | Typ | Was | Kann blockieren? |
 |-----|------|---------|-----|-----|:----------------:|
-| H-01 | SessionStart | startup | command | Lade core-memory.json (Schicht 1) + relevanten Kontext aus HippoRAG 2, verbinde mit Gehirn-System | Nein |
-| H-02 | SessionStart | compact | command | Lade aktive Profile neu nach Komprimierung | Nein |
-| H-03 | SessionStart | resume | command | Lade letzten Stand aus DB beim Fortsetzen | Nein |
+| H-01 | SessionStart | startup (konzeptionell) | command | Lade core-memory.json (Schicht 1) + relevanten Kontext aus HippoRAG 2, verbinde mit Gehirn-System | Nein |
+| H-02 | SessionStart | compact (konzeptionell) | command | Lade aktive Profile neu nach Komprimierung | Nein |
+| H-03 | SessionStart | resume (konzeptionell) | command | Lade letzten Stand aus DB beim Fortsetzen | Nein |
 | H-04 | UserPromptSubmit | — | command | Route Eingabe an Berater, validiere Input + Auto-Recall: suche relevante Erinnerungen in Mem0 (Schicht 2) und injiziere in Kontext | Ja |
 | H-05 | PreToolUse | Write\|Edit | agent | Sicherheits-Check vor Code-Aenderungen | Ja |
 | H-06 | PreToolUse | Bash | agent | Gefaehrliche Befehle blockieren (rm -rf, DROP, --force) | Ja |

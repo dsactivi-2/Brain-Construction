@@ -45,4 +45,4 @@ Manual    Manual
 | 5 | User-Manual Detail | 3x Detail-Manual (Admin, Supervisor, Worker) | Fertig |
 | 6 | User-Manual Kurz | 3x Kurz-Manual (Admin, Supervisor, Worker) | Fertig |
 | 7 | Finaler Review | Alle Phasen geprueft | Fertig |
-| 8 | Deep Review + Fixes | Alle Findings behoben | In Arbeit |
+| 8 | Deep Review + Fixes | Alle Findings behoben | Fertig |

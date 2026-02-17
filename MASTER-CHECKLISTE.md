@@ -135,7 +135,7 @@ Jeder Punkt muss abgehakt werden bevor das Projekt als fertig gilt.
 - [x] Inhaltsverzeichnis mit Seitennummern — 2026-02-17 04:05
 - [x] Alle Funktionen dokumentiert — 2026-02-17 04:05
 - [x] Alle Einstellungen dokumentiert — 2026-02-17 04:05
-- [x] Funktions- und Endpoint-Registry (FN-001 bis FN-059, EP-001 bis EP-012) — 2026-02-17 04:05
+- [x] Funktions- und Endpoint-Registry (FN-001 bis FN-063, EP-001 bis EP-012) — 2026-02-17 04:05
 - [x] Version: Admin — 2026-02-17 04:05
 - [x] Version: Supervisor — 2026-02-17 04:05
 - [x] Version: Worker — 2026-02-17 04:06
@@ -159,12 +159,12 @@ Jeder Punkt muss abgehakt werden bevor das Projekt als fertig gilt.
 - [x] Bereit zum Bauen — 2026-02-17 04:21
 
 ## Phase 8: Deep Review + Fixes
-- [ ] Alle Dokumente reviewed
-- [ ] Alle Findings gefixt
-- [ ] Tool-Namen konsistent (alle Dokumente)
-- [ ] DB-Anzahl konsistent (4 ueberall)
-- [ ] Command-Beschreibungen konsistent
-- [ ] Querverweise zwischen Dokumenten
-- [ ] Supervisor-Detail-Manual vervollstaendigt
-- [ ] Worker-Detail-Manual vervollstaendigt
-- [ ] Phase 8 committed
+- [x] Alle Dokumente reviewed — 2026-02-17
+- [x] Alle Findings gefixt — 2026-02-17
+- [x] Tool-Namen konsistent (alle Dokumente) — 2026-02-17
+- [x] DB-Anzahl konsistent (4 ueberall) — 2026-02-17
+- [x] Command-Beschreibungen konsistent — 2026-02-17
+- [x] Querverweise zwischen Dokumenten — 2026-02-17
+- [x] Supervisor-Detail-Manual vervollstaendigt — 2026-02-17
+- [x] Worker-Detail-Manual vervollstaendigt — 2026-02-17
+- [x] Phase 8 committed — 2026-02-17
