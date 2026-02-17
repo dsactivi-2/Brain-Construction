@@ -296,6 +296,7 @@ EOF
 **Wofuer:** Persistenter Kontext der IMMER im Agenten-Kontext geladen ist — wie ein Notizbuch das der Agent bei jedem Start liest.
 
 Das Core Memory besteht aus 5 Bloecken mit insgesamt 20.000 Zeichen Kapazitaet.
+Die Bloecke sind aufgeteilt in **Shared** (Redis, alle Agenten lesen) und **Agent-Only** (lokale JSON pro Agent).
 
 ### Datei erstellen
 
@@ -308,32 +309,39 @@ cat > ~/.claude/core-memory.json << 'EOF'
     "USER": {
       "max_chars": 4000,
       "content": "",
-      "description": "Wer ist der Nutzer? Name, Rolle, Vorlieben, Kommunikationsstil, wichtige Kontexte"
+      "storage": "redis",
+      "description": "SHARED — Wer ist der Nutzer? Name, Rolle, Vorlieben, Kommunikationsstil"
     },
     "PROJEKT": {
       "max_chars": 4000,
       "content": "",
-      "description": "Aktuelles Projekt: Name, Stack, Architektur, wichtige Entscheidungen, Ziele"
+      "storage": "redis",
+      "description": "SHARED — Aktuelles Projekt: Name, Stack, Architektur, wichtige Entscheidungen"
     },
     "ENTSCHEIDUNGEN": {
       "max_chars": 4000,
       "content": "",
-      "description": "Getroffene Architektur- und Design-Entscheidungen mit Begruendung (WARUM so und nicht anders)"
+      "storage": "redis",
+      "description": "SHARED — Getroffene Architektur- und Design-Entscheidungen mit Begruendung"
     },
     "FEHLER-LOG": {
       "max_chars": 4000,
       "content": "",
-      "description": "Bekannte Fehler, Workarounds, Was-nicht-funktioniert-hat — damit der Agent sie nicht wiederholt"
+      "storage": "local",
+      "description": "AGENT-ONLY — Bekannte Fehler, Workarounds — pro Agent isoliert"
     },
     "AKTUELLE-ARBEIT": {
       "max_chars": 4000,
       "content": "",
-      "description": "Was wird gerade gemacht? Offene Tasks, naechste Schritte, Blocker — wird bei jedem SessionEnd aktualisiert"
+      "storage": "local",
+      "description": "AGENT-ONLY — Was gerade passiert, offene Tasks — pro Agent isoliert"
     }
   }
 }
 EOF
 ```
+
+> **Shared vs. Agent-Only:** Bloecke mit `"storage": "redis"` werden beim SessionStart aus Redis geladen (alle Agenten sehen dieselben Daten). Bloecke mit `"storage": "local"` bleiben in der lokalen JSON-Datei pro Agent — kein Locking-Problem bei 30-40 parallelen Agenten.
 
 ### Bloecke erklaert
 
@@ -447,7 +455,7 @@ Die folgenden Tools stehen allen Agenten automatisch zur Verfuegung:
 | Tool | Funktion | Beispiel |
 |------|----------|---------|
 | `memory_search` | Semantische Suche in Erinnerungen | `memory_search("Redis Konfiguration")` |
-| `memory_store` | Neue Erinnerung speichern | `memory_store("Redis max 512MB fuer Light Setup")` |
+| `memory_store` | Neue Erinnerung speichern (mit optionalem Priority-Score 1-10) | `memory_store("Redis max 512MB", priority=7)` |
 | `memory_list` | Alle Erinnerungen auflisten (gefiltert) | `memory_list(scope="long_term", limit=20)` |
 | `memory_get` | Einzelne Erinnerung abrufen per ID | `memory_get("mem_abc123")` |
 | `memory_forget` | Erinnerung loeschen (veraltet/falsch) | `memory_forget("mem_abc123")` |
@@ -838,15 +846,15 @@ Das vollstaendige Gehirn-System besteht aus 6 Schichten:
 |:-------:|------|----------|:------------:|:-----------:|-------|
 | **S1** | Core Memory | JSON + Redis | Shared + Agent-Only | Beides | Persistenter Kontext — immer geladen |
 | **S2** | Auto-Recall/Capture | Qdrant + Redis | Shared | Cloud | Automatisches Erinnern + Speichern (mit Priority-Score) |
-| **S3** | HippoRAG 2 | Neo4j + Qdrant | Shared | Cloud | Wissensgraph + PPR — hipporag-service |
-| **S4** | Agentic RAG | Prozess (lokal) | Agent-Only | Lokal | Router + Evaluator + Retry — agentic-rag Service |
-| **S5** | Learning Graphs | Neo4j | Shared | Cloud | Selbst-erweiternd — learning-graphs Service |
+| **S3** | HippoRAG 2 | Neo4j + Qdrant | Shared | Cloud | Wissensgraph + PPR — hipporag_service |
+| **S4** | Agentic RAG | Prozess (lokal) | Agent-Only | Lokal | Router + Evaluator + Retry — agentic_rag Service |
+| **S5** | Learning Graphs | Neo4j | Shared | Cloud | Selbst-erweiternd — learning_graphs Service |
 | **S6** | Recall Memory | PostgreSQL | Shared | Cloud | Rohe Konversationshistorie (Pool-Size 40) |
 
 **Core Memory Split:** [USER], [PROJEKT], [ENTSCHEIDUNGEN] → Redis (Shared).
 [AKTUELLE-ARBEIT], [FEHLER-LOG] → lokale JSON pro Agent (Agent-Only).
 
-**Neue Services:** hipporag-service (S3), agentic-rag (S4), learning-graphs (S5)
+**Neue Services:** hipporag_service (S3), agentic_rag (S4), learning_graphs (S5)
 erfordern eigenes Setup — siehe 02-RUNBOOK.md Schritte 2.8–2.10.
 
 **Gehirn-Mechanismen:** Konsolidierung (woechentlich), Decay/Pruning (taeglich),

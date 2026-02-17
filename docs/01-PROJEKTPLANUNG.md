@@ -527,7 +527,7 @@ Shared: Alle Agenten, alle Rechner, alle Sessions
 - Speichert Wissen + Beziehungen
 - Vergisst nie — Menschenaehnliches Gedaechtnis
 - **SHARED** — alle 30-40 Agenten lesen + schreiben, **CLOUD**
-- Service: `hipporag-service` (Entity-Extraktion → Graph-Build → PPR → Retrieval)
+- Service: `hipporag_service` (Entity-Extraktion → Graph-Build → PPR → Retrieval)
 
 #### Schicht 4: Agentic RAG
 - Intelligente Suchsteuerung + Bewertung
@@ -536,14 +536,14 @@ Shared: Alle Agenten, alle Rechner, alle Sessions
 - Evaluator bewertet: Ergebnis gut genug? Sonst Retry mit anderer Quelle
 - Feedback-Loop: Falsche Ergebnisse → markiert als veraltet → Score sinkt
 - **AGENT-ONLY** — jeder Agent steuert seine eigene Suche, **LOKAL**
-- Service: `agentic-rag` (Router + Evaluator + Retry-Logik + Orchestrator)
+- Service: `agentic_rag` (Router + Evaluator + Retry-Logik + Orchestrator)
 
 #### Schicht 5: Agentic Learning Graphs
 - Selbst-erweiternd, Agenten bauen gemeinsames Wissensnetz
 - Waechst mit jeder Interaktion
 - Pattern-Detection erkennt wiederkehrende Muster
 - **SHARED** — Agenten bauen gemeinsam, **CLOUD** (Neo4j, gleiche Instanz wie S3)
-- Service: `learning-graphs` (Pattern-Detector + Graph-Updater + Consolidator)
+- Service: `learning_graphs` (Pattern-Detector + Graph-Updater + Consolidator)
 
 #### Schicht 6: Recall Memory
 - Komplette rohe Konversationshistorie wird gespeichert
@@ -595,11 +595,11 @@ Jede Erinnerung bekommt Score 1-10:
 - Routine-Commit → 2, Standard-Log → 1
 Hoehere Scores werden bei Auto-Recall (S2) bevorzugt geladen.
 
-### 3 fehlende Services
+### 3 Gehirn-Services (Implementierung)
 
-#### hipporag-service (Schicht 3)
+#### hipporag_service (Schicht 3)
 ```
-hipporag-service/
+hipporag_service/
 ├── entity_extractor.py    ← LLM extrahiert Entitaeten aus Text
 ├── graph_builder.py       ← Entitaeten + Beziehungen → Neo4j
 ├── ppr.py                 ← PersonalizedPageRank Algorithmus
@@ -607,9 +607,9 @@ hipporag-service/
 └── server.py              ← MCP/REST Endpoint
 ```
 
-#### agentic-rag (Schicht 4)
+#### agentic_rag (Schicht 4)
 ```
-agentic-rag/
+agentic_rag/
 ├── router.py              ← Entscheidet: S1? S2? S3? S6? Alle?
 ├── evaluator.py           ← Bewertet: Ist das Ergebnis gut genug?
 ├── retry_logic.py         ← Schlecht? → Andere Quelle, andere Query
@@ -617,9 +617,9 @@ agentic-rag/
 └── orchestrator.py        ← Multi-Step: Suche → Bewerte → Verfeinere
 ```
 
-#### learning-graphs (Schicht 5)
+#### learning_graphs (Schicht 5)
 ```
-learning-graphs/
+learning_graphs/
 ├── pattern_detector.py    ← Erkennt wiederkehrende Muster
 ├── graph_updater.py       ← SessionEnd-Hook → neue Knoten/Kanten
 └── consolidator.py        ← Woechentlich: Verdichte + Prune
@@ -643,8 +643,10 @@ Agenten kommunizieren ueber Redis Pub/Sub:
 - Kanäle: `bugs`, `decisions`, `progress`, `blocker`
 
 #### Conflict Resolution
-Hierarchie bei widersprüchlichen Shared-Writes:
-- Berater > Architekt > Coder > Tester > Dokumentierer
+Hierarchie bei widersprüchlichen Shared-Writes (alle 10 Agenten):
+- Berater (10) > Architekt (9) > Coder (7) > Tester (6) >
+  Reviewer (5) > Designer (4) > Analyst (3) > Doc-Scanner (2) >
+  DevOps (2) > Dokumentierer (1)
 - Bei gleicher Ebene: juengerer Eintrag gewinnt
 - Unloesbare Konflikte → automatische Blocker-Frage an Admin/Supervisor
 
@@ -665,7 +667,8 @@ Agent bekommt Warnung: "Eingeschraenkter Modus — [DB] nicht erreichbar"
 
 #### Versioning / Graph-Rollback
 Graph-Snapshot vor jeder Konsolidierung:
-- `neo4j-admin dump` → datierter Snapshot
+- APOC Export (`apoc.export.cypher.all`) → datierter Snapshot (ohne DB-Stop)
+- Alternative: `neo4j-admin dump` (Community Edition: DB muss gestoppt werden!)
 - Max 7 Snapshots (1 pro Woche, aeltere werden rotiert)
 - Bei vergiftetem Graph → Rollback auf letzten guten Snapshot
 
@@ -691,12 +694,18 @@ Graph-Snapshot vor jeder Konsolidierung:
 | FN-051 | `core_memory_read`         | Core Memory lesen                     |
 | FN-052 | `core_memory_update`       | Core Memory aktualisieren             |
 | FN-053 | `memory_search`            | Erinnerungen durchsuchen              |
-| FN-054 | `memory_store`             | Erinnerung speichern                  |
+| FN-054 | `memory_store`             | Erinnerung speichern (mit Priority-Score 1-10) |
 | FN-055 | `memory_list`              | Erinnerungen auflisten                |
 | FN-056 | `memory_get`               | Einzelne Erinnerung abrufen           |
 | FN-057 | `memory_forget`            | Erinnerung loeschen                   |
 | FN-058 | `conversation_search`      | Konversationen durchsuchen            |
 | FN-059 | `conversation_search_date` | Konversationen nach Datum suchen      |
+| FN-064 | `hipporag_ingest`          | Text in HippoRAG ingesten (S3)        |
+| FN-065 | `hipporag_retrieve`        | Wissen aus HippoRAG abrufen (S3)      |
+| FN-066 | `learning_graph_update`    | Graph nach Session aktualisieren (S5) |
+| FN-067 | `consolidate`              | Konsolidierung ausfuehren             |
+| FN-068 | `decay_prune`              | Decay/Pruning ausfuehren              |
+| FN-069 | `rag_route`                | Query routen + bewerten (S4)          |
 
 ```
 Core Memory (Schicht 1):

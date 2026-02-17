@@ -260,41 +260,19 @@ driver.close()
 **Fehlerbehandlung:** Connection refused → Docker Container laeuft nicht → `docker start neo4j`
 **Rollback:** `rm -rf ~/claude-agent-team/brain/venv`
 
-### 2.2 Agentic RAG Setup
+### 2.2 Agentic RAG Vorbereitung
 
 **Zweck:** Intelligente Suchsteuerung + Selbst-Korrektur
 
-**Befehle:**
-```bash
-cd ~/claude-agent-team/brain
-
-# Agentic RAG Modul erstellen
-mkdir -p agentic_rag
-cat > agentic_rag/__init__.py << 'EOF'
-# Agentic RAG — Suchsteuerung + Bewertung
-# Entscheidet: WANN suchen, WO suchen, WIE bewerten
-# Korrigiert sich selbst bei schlechten Ergebnissen
-EOF
-```
+> **Hinweis:** Die Code-Implementierung erfolgt in Schritt 2.9. Hier wird nur die Abhaengigkeit auf HippoRAG 2 dokumentiert.
 
 **Abhaengigkeit:** HippoRAG 2 muss konfiguriert sein (Schritt 2.1)
 
-### 2.3 Agentic Learning Graphs Setup
+### 2.3 Agentic Learning Graphs Vorbereitung
 
 **Zweck:** Selbst-erweiterndes Wissensnetz
 
-**Befehle:**
-```bash
-cd ~/claude-agent-team/brain
-
-# Learning Graphs Modul erstellen
-mkdir -p learning_graphs
-cat > learning_graphs/__init__.py << 'EOF'
-# Agentic Learning Graphs — Selbst-Erweiterung
-# Agent baut eigenes Wissensnetz das mit jeder Interaktion waechst
-# Neue Entitaeten + Beziehungen werden automatisch hinzugefuegt
-EOF
-```
+> **Hinweis:** Die Code-Implementierung erfolgt in Schritt 2.10. Hier wird nur die Abhaengigkeit dokumentiert.
 
 **Abhaengigkeit:** Neo4j (Schritt 1.1) + HippoRAG 2 (Schritt 2.1)
 
@@ -324,11 +302,10 @@ EOF
 
 **Befehle:**
 ```bash
-cd ~/claude-agent-team/brain
-mkdir -p core_memory
+mkdir -p ~/.claude
 
 # Core-Memory Konfiguration erstellen
-cat > core_memory/core-memory.json << 'EOF'
+cat > ~/.claude/core-memory.json << 'EOF'
 {
   "max_size_chars": 20000,
   "blocks": {
@@ -375,7 +352,7 @@ EOF
 cat > ~/.claude/hooks/core-memory-inject.sh << 'COREEOF'
 #!/bin/bash
 # Core Memory in den System-Prompt injizieren
-CORE_MEM_FILE="$HOME/claude-agent-team/brain/core_memory/core-memory.json"
+CORE_MEM_FILE="$HOME/.claude/core-memory.json"
 
 if [ -f "$CORE_MEM_FILE" ]; then
   echo "=== CORE MEMORY START ==="
@@ -396,12 +373,12 @@ chmod +x ~/.claude/hooks/core-memory-inject.sh
 **Pruefung:**
 ```bash
 # Core-Memory JSON validieren
-python3 -c "import json; json.load(open('core_memory/core-memory.json')); print('Core-Memory JSON: OK')"
+python3 -c "import json, os; json.load(open(os.path.expanduser('~/.claude/core-memory.json'))); print('Core-Memory JSON: OK')"
 
 # Testblock schreiben und lesen
 python3 -c "
-import json
-f = 'core_memory/core-memory.json'
+import json, os
+f = os.path.expanduser('~/.claude/core-memory.json')
 data = json.load(open(f))
 data['blocks']['user']['value'] = 'Test-Nutzer'
 json.dump(data, open(f, 'w'), indent=2)
@@ -409,8 +386,8 @@ print('Schreiben OK — USER Block:', data['blocks']['user']['value'])
 "
 ```
 
-**Fehlerbehandlung:** JSON-Syntax-Fehler → `python3 -m json.tool core_memory/core-memory.json`
-**Rollback:** `rm -rf ~/claude-agent-team/brain/core_memory`
+**Fehlerbehandlung:** JSON-Syntax-Fehler → `python3 -m json.tool ~/.claude/core-memory.json`
+**Rollback:** `rm ~/.claude/core-memory.json`
 
 ### 2.5 Auto-Recall / Auto-Capture (Mem0-Style Schicht)
 
@@ -475,8 +452,8 @@ sys.path.insert(0, "$BRAIN_DIR")
 
 from auto_memory.recall import search_memories
 
-# Hook-Daten aus stdin parsen
-hook_data = json.loads('''$INPUT''')
+# Hook-Daten aus stdin parsen (sicher, ohne Triple-Quote-Problem)
+hook_data = json.loads(r"""$INPUT""")
 prompt = hook_data.get("prompt", "")
 
 if not prompt:
@@ -518,8 +495,8 @@ sys.path.insert(0, "$BRAIN_DIR")
 
 from auto_memory.capture import extract_and_store
 
-# Hook-Daten aus stdin parsen
-hook_data = json.loads('''$INPUT''')
+# Hook-Daten aus stdin parsen (sicher, ohne Triple-Quote-Problem)
+hook_data = json.loads(r"""$INPUT""")
 conversation = hook_data.get("conversation", "")
 
 if not conversation:
@@ -571,7 +548,7 @@ chmod +x ~/.claude/hooks/auto-capture.sh
 
 | Tool | Beschreibung |
 |------|-------------|
-| `memory_store(text, scope, type)` | Erinnerung manuell speichern |
+| `memory_store(text, scope, type, priority)` | Erinnerung manuell speichern (priority 1-10, default: auto nach type) |
 | `memory_search(query, scope, top_k)` | Erinnerungen semantisch suchen |
 | `memory_forget(memory_id)` | Einzelne Erinnerung loeschen |
 | `memory_get(memory_id)` | Einzelne Erinnerung abrufen |
@@ -659,25 +636,26 @@ def init():
     conn = sqlite3.connect(DB_PATH)
     conn.execute("""
         CREATE TABLE IF NOT EXISTS conversations (
-            id TEXT PRIMARY KEY,
+            id INTEGER PRIMARY KEY AUTOINCREMENT,
             session_id TEXT NOT NULL,
-            agent_name TEXT DEFAULT 'unknown',
-            started_at DATETIME NOT NULL,
-            ended_at DATETIME NOT NULL,
-            message_count INTEGER DEFAULT 0,
-            summary TEXT,
-            raw_conversation TEXT NOT NULL,
-            embedding_ids TEXT,
-            tags TEXT
+            timestamp DATETIME NOT NULL DEFAULT (datetime('now')),
+            role TEXT NOT NULL,
+            content TEXT,
+            tool_calls TEXT,
+            metadata TEXT
         )
     """)
     conn.execute("""
-        CREATE INDEX IF NOT EXISTS idx_conversations_date
-        ON conversations(started_at)
+        CREATE INDEX IF NOT EXISTS idx_conversations_session
+        ON conversations(session_id)
     """)
     conn.execute("""
-        CREATE INDEX IF NOT EXISTS idx_conversations_agent
-        ON conversations(agent_name)
+        CREATE INDEX IF NOT EXISTS idx_conversations_timestamp
+        ON conversations(timestamp)
+    """)
+    conn.execute("""
+        CREATE INDEX IF NOT EXISTS idx_conversations_role
+        ON conversations(role)
     """)
     conn.commit()
     conn.close()
@@ -708,25 +686,36 @@ from datetime import datetime
 
 DB_PATH = os.path.join("$BRAIN_DIR", "recall_memory", "conversations.db")
 
-# Hook-Daten aus stdin parsen
-hook_data = json.loads('''$INPUT''')
+# Hook-Daten aus stdin parsen (sicher, ohne Triple-Quote-Problem)
+hook_data = json.loads(r"""$INPUT""")
 CONV_DATA = hook_data.get("conversation", "")
 SESSION_ID = hook_data.get("session_id", "unknown")
 AGENT_NAME = hook_data.get("agent_name", "unknown")
 
 if CONV_DATA:
     conn = sqlite3.connect(DB_PATH)
-    conv_id = str(uuid.uuid4())
     now = datetime.now().isoformat()
+    metadata = json.dumps({"agent_name": AGENT_NAME})
 
-    conn.execute("""
-        INSERT INTO conversations (id, session_id, agent_name, started_at, ended_at, raw_conversation)
-        VALUES (?, ?, ?, ?, ?, ?)
-    """, (conv_id, SESSION_ID, AGENT_NAME, now, now, CONV_DATA))
+    # Konversation als einzelne Nachrichten speichern (Message-Level)
+    messages = json.loads(CONV_DATA) if isinstance(CONV_DATA, str) else CONV_DATA
+    if isinstance(messages, list):
+        for msg in messages:
+            conn.execute("""
+                INSERT INTO conversations (session_id, timestamp, role, content, tool_calls, metadata)
+                VALUES (?, ?, ?, ?, ?, ?)
+            """, (SESSION_ID, msg.get("timestamp", now), msg.get("role", "unknown"),
+                  msg.get("content", ""), json.dumps(msg.get("tool_calls")), metadata))
+    else:
+        # Fallback: Gesamte Konversation als einzelnen Eintrag
+        conn.execute("""
+            INSERT INTO conversations (session_id, timestamp, role, content, metadata)
+            VALUES (?, ?, ?, ?, ?)
+        """, (SESSION_ID, now, "session", str(CONV_DATA), metadata))
 
     conn.commit()
     conn.close()
-    print(f"[RECALL] Konversation gespeichert: {conv_id}")
+    print(f"[RECALL] Konversation gespeichert: {SESSION_ID}")
 else:
     print("[RECALL] Keine Konversationsdaten — uebersprungen")
 PYEOF
@@ -771,11 +760,11 @@ def conversation_search(query: str, limit: int = 10):
     Nutzt SQLite FTS oder Qdrant-Vektoren fuer semantische Suche."""
     conn = sqlite3.connect(DB_PATH)
     cursor = conn.execute("""
-        SELECT id, session_id, agent_name, started_at, summary,
-               substr(raw_conversation, 1, 500) as preview
+        SELECT id, session_id, timestamp, role, substr(content, 1, 500) as preview,
+               json_extract(metadata, '$.agent_name') as agent_name
         FROM conversations
-        WHERE raw_conversation LIKE ?
-        ORDER BY started_at DESC
+        WHERE content LIKE ?
+        ORDER BY timestamp DESC
         LIMIT ?
     """, (f"%{query}%", limit))
     results = cursor.fetchall()
@@ -787,20 +776,19 @@ def conversation_search_date(start: str, end: str, agent: str = None, limit: int
     conn = sqlite3.connect(DB_PATH)
     if agent:
         cursor = conn.execute("""
-            SELECT id, session_id, agent_name, started_at, summary,
-                   substr(raw_conversation, 1, 500) as preview
+            SELECT id, session_id, timestamp, role, substr(content, 1, 500) as preview
             FROM conversations
-            WHERE started_at BETWEEN ? AND ? AND agent_name = ?
-            ORDER BY started_at DESC
+            WHERE timestamp BETWEEN ? AND ?
+              AND json_extract(metadata, '$.agent_name') = ?
+            ORDER BY timestamp DESC
             LIMIT ?
         """, (start, end, agent, limit))
     else:
         cursor = conn.execute("""
-            SELECT id, session_id, agent_name, started_at, summary,
-                   substr(raw_conversation, 1, 500) as preview
+            SELECT id, session_id, timestamp, role, substr(content, 1, 500) as preview
             FROM conversations
-            WHERE started_at BETWEEN ? AND ?
-            ORDER BY started_at DESC
+            WHERE timestamp BETWEEN ? AND ?
+            ORDER BY timestamp DESC
             LIMIT ?
         """, (start, end, limit))
     results = cursor.fetchall()
@@ -894,7 +882,7 @@ ls -la ~/.claude/hooks/session-end-recall.sh
 **Befehle:**
 ```bash
 cd ~/claude-agent-team/brain
-mkdir -p hipporag-service && cd hipporag-service
+mkdir -p hipporag_service && cd hipporag_service
 
 # Struktur erstellen
 cat > entity_extractor.py << 'PYEOF'
@@ -924,7 +912,7 @@ PYEOF
 
 **Pruefung:** `curl http://localhost:8102/health` gibt `{"status": "ok"}`
 **Fehlerbehandlung:** Neo4j/Qdrant nicht erreichbar → Degraded Mode Warnung
-**Rollback:** `rm -rf ~/claude-agent-team/brain/hipporag-service`
+**Rollback:** `rm -rf ~/claude-agent-team/brain/hipporag_service`
 
 ### 2.9 Agentic RAG (Schicht 4 — Implementierung)
 
@@ -933,7 +921,7 @@ PYEOF
 **Befehle:**
 ```bash
 cd ~/claude-agent-team/brain
-mkdir -p agentic-rag && cd agentic-rag
+mkdir -p agentic_rag && cd agentic_rag
 
 cat > router.py << 'PYEOF'
 """Entscheidet welche Schicht(en) abgefragt werden"""
@@ -970,7 +958,7 @@ PYEOF
 
 **Pruefung:** `python3 -c "from agentic_rag.router import route_query; print('Agentic RAG: OK')"`
 **Fehlerbehandlung:** Bei Ausfall einzelner Schichten → Degraded Mode (verfuegbare Quellen nutzen)
-**Rollback:** `rm -rf ~/claude-agent-team/brain/agentic-rag`
+**Rollback:** `rm -rf ~/claude-agent-team/brain/agentic_rag`
 
 ### 2.10 Learning Graphs (Schicht 5 — Implementierung)
 
@@ -979,7 +967,7 @@ PYEOF
 **Befehle:**
 ```bash
 cd ~/claude-agent-team/brain
-mkdir -p learning-graphs && cd learning-graphs
+mkdir -p learning_graphs && cd learning_graphs
 
 cat > pattern_detector.py << 'PYEOF'
 """Erkennt wiederkehrende Muster aus Agenten-Interaktionen"""
@@ -1006,16 +994,19 @@ PYEOF
 
 **Pruefung:** `python3 -c "from learning_graphs.graph_updater import update_graph; print('Learning Graphs: OK')"`
 **Fehlerbehandlung:** Neo4j nicht erreichbar → Aenderungen lokal puffern, spaeter synchronisieren
-**Rollback:** `rm -rf ~/claude-agent-team/brain/learning-graphs`
+**Rollback:** `rm -rf ~/claude-agent-team/brain/learning_graphs`
 
 ### 2.11 Gehirn-Mechanismen
 
 #### Konsolidierung (Cronjob — wie Schlaf)
 ```bash
-# Cronjob einrichten (woechentlich Sonntag 03:00)
+# Linux/Mac: Cronjob einrichten (woechentlich Sonntag 03:00)
 crontab -e
 # Eintrag:
-0 3 * * 0 cd ~/claude-agent-team/brain && python3 learning-graphs/consolidator.py --mode=consolidate 2>&1 >> logs/consolidation.log
+0 3 * * 0 cd ~/claude-agent-team/brain && python3 learning_graphs/consolidator.py --mode=consolidate 2>&1 >> logs/consolidation.log
+
+# Windows: Task Scheduler (Git Bash oder WSL2 noetig)
+# schtasks /create /tn "BrainConsolidate" /tr "bash -c 'cd ~/claude-agent-team/brain && python3 learning_graphs/consolidator.py --mode=consolidate'" /sc weekly /d SUN /st 03:00
 
 # Was passiert:
 # 1. Graph-Snapshot erstellen (neo4j-admin dump)
@@ -1027,8 +1018,11 @@ crontab -e
 
 #### Decay/Pruning (Cronjob — aktives Vergessen)
 ```bash
-# Cronjob einrichten (taeglich 04:00)
-0 4 * * * cd ~/claude-agent-team/brain && python3 learning-graphs/consolidator.py --mode=decay 2>&1 >> logs/decay.log
+# Linux/Mac: Cronjob einrichten (taeglich 04:00)
+0 4 * * * cd ~/claude-agent-team/brain && python3 learning_graphs/consolidator.py --mode=decay 2>&1 >> logs/decay.log
+
+# Windows: Task Scheduler
+# schtasks /create /tn "BrainDecay" /tr "bash -c 'cd ~/claude-agent-team/brain && python3 learning_graphs/consolidator.py --mode=decay'" /sc daily /st 04:00
 
 # Was passiert:
 # 1. Alle Eintraege pruefen: Letzter Abruf > 90 Tage?
@@ -1105,14 +1099,21 @@ REDIS
 
 #### Versioning / Graph-Rollback
 ```bash
-# Snapshot vor jeder Konsolidierung
-neo4j-admin dump --database=neo4j --to-path=backups/graph-$(date +%Y%m%d).dump
+# Snapshot vor jeder Konsolidierung — APOC Export (funktioniert ohne DB-Stop)
+docker exec neo4j cypher-shell -u neo4j -p SICHERES_PASSWORT \
+  "CALL apoc.export.cypher.all('/backups/graph-$(date +%Y%m%d).cypher', {format: 'cypher-shell'})"
+
+# Alternative: neo4j-admin dump (ACHTUNG: Community Edition = DB muss gestoppt sein!)
+# docker stop neo4j
+# docker exec neo4j neo4j-admin database dump neo4j --to-path=/backups/graph-$(date +%Y%m%d).dump
+# docker start neo4j
 
 # Max 7 Snapshots behalten (aeltere rotieren)
-ls -t backups/graph-*.dump | tail -n +8 | xargs rm -f
+ls -t backups/graph-*.cypher | tail -n +8 | xargs rm -f
 
-# Rollback bei vergiftetem Graph:
-neo4j-admin load --database=neo4j --from-path=backups/graph-DATUM.dump --overwrite-destination
+# Rollback bei vergiftetem Graph (APOC):
+docker exec neo4j cypher-shell -u neo4j -p SICHERES_PASSWORT "MATCH (n) DETACH DELETE n"
+docker exec neo4j cypher-shell -u neo4j -p SICHERES_PASSWORT < backups/graph-DATUM.cypher
 ```
 
 ---
@@ -1218,13 +1219,15 @@ chmod +x ~/.claude/hooks/*.sh
 ```bash
 # settings.json mit ALLEN Hooks schreiben (einschliesslich Gehirn-System-Hooks)
 # WICHTIG: Diese Datei enthaelt ALLE Hook-Konfigurationen. Nicht einzeln ueberschreiben!
+# HINWEIS: SessionStart-Hooks haben KEINEN "matcher" — Claude Code unterstuetzt das nicht.
+# Die konzeptionellen Matcher (startup/compact/resume) aus der Projektplanung werden
+# stattdessen durch ein einziges Skript (session-start-startup.sh) abgedeckt,
+# das intern den Kontext erkennt und entsprechend reagiert.
 cat > ~/.claude/settings.json << 'SETTINGSEOF'
 {
   "hooks": {
     "SessionStart": [
-      {"matcher": "startup", "type": "command", "command": "bash ~/.claude/hooks/session-start-startup.sh", "timeout": 15000},
-      {"matcher": "compact", "type": "command", "command": "bash ~/.claude/hooks/session-start-compact.sh", "timeout": 10000},
-      {"matcher": "resume", "type": "command", "command": "bash ~/.claude/hooks/session-start-resume.sh", "timeout": 15000},
+      {"type": "command", "command": "bash ~/.claude/hooks/session-start-startup.sh", "timeout": 15000},
       {"type": "command", "command": "bash ~/.claude/hooks/core-memory-inject.sh", "timeout": 10000}
     ],
     "UserPromptSubmit": [
@@ -1546,7 +1549,7 @@ services:
       RAG_API_URL: http://rag-api:8100
 
   hipporag:
-    build: ./brain/hipporag-service
+    build: ./brain/hipporag_service
     container_name: hipporag
     restart: always
     ports:
@@ -1559,9 +1562,9 @@ services:
       NEO4J_PASSWORD: ${NEO4J_PASSWORD}
       QDRANT_URL: http://qdrant:6333
 
-  learning-graphs:
-    build: ./brain/learning-graphs
-    container_name: learning-graphs
+  learning_graphs:
+    build: ./brain/learning_graphs
+    container_name: learning_graphs
     restart: always
     depends_on:
       - neo4j
@@ -1599,7 +1602,7 @@ CLAUDE_API_KEY=DEIN_API_KEY
 EOF
 ```
 
-> **Hinweis:** Die Dockerfiles fuer `rag-api` und `doc-scanner` (unter `./mcp-servers/rag-api/Dockerfile` und `./mcp-servers/doc-scanner/Dockerfile`) werden in der Bau-Phase erstellt. Ohne diese Dateien schlaegt `docker compose build` fehl.
+> **Hinweis:** Die Dockerfiles fuer `rag-api`, `doc-scanner`, `hipporag_service` und `learning_graphs` werden in der Bau-Phase erstellt. Pfade: `./mcp-servers/rag-api/Dockerfile`, `./mcp-servers/doc-scanner/Dockerfile`, `./brain/hipporag_service/Dockerfile`, `./brain/learning_graphs/Dockerfile`. Ohne diese Dateien schlaegt `docker compose build` fehl.
 
 ### 10.2 Deployment
 
@@ -1665,7 +1668,7 @@ curl -s http://localhost:8102/health > /dev/null && echo "OK" || echo "FEHLER (D
 
 # Learning-Graphs
 echo -n "Learning-Graphs: "
-docker exec learning-graphs python3 -c "print('OK')" 2>/dev/null && echo "OK" || echo "FEHLER (Degraded: S5 deaktiviert)"
+docker exec learning_graphs python3 -c "print('OK')" 2>/dev/null && echo "OK" || echo "FEHLER (Degraded: S5 deaktiviert)"
 
 # Degraded Mode Check
 echo ""

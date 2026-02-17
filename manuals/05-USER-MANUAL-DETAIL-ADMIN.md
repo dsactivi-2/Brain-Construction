@@ -66,7 +66,7 @@ Ein autonomes Multi-Agent-System bestehend aus 10 spezialisierten KI-Agenten die
 | Agenten | 10 | Spezialisierte Arbeiter |
 | Hooks | 17 | Automatische Qualitaets- und Sicherheits-Kontrolle |
 | Datenbanken | 4 Cloud + Lokal | Neo4j (Graph, Shared), Qdrant (Vektor, Shared), Redis (Cache+Event-Bus, Shared), PostgreSQL (Recall, Shared) + lokale JSON (Agent-Only) |
-| Services | 3 | hipporag-service (S3), agentic-rag (S4), learning-graphs (S5) |
+| Services | 3 | hipporag_service (S3), agentic_rag (S4), learning_graphs (S5) |
 | MCP-Server | 4+ | RAG-API, Doc-Scanner, GitHub, Notion |
 | Kommunikation | 4 | Terminal, Slack, WhatsApp, Linear |
 
@@ -619,7 +619,7 @@ Agent beendet Antwort
 | Tool | Beschreibung | Parameter | Rueckgabe |
 |------|-------------|-----------|-----------|
 | `memory_search(query)` | Erinnerungen durchsuchen | Suchbegriff (Text) | Liste relevanter Erinnerungen |
-| `memory_store(content, scope)` | Neue Erinnerung speichern | Inhalt + Scope (long/short) | Bestaetigung + Memory-ID |
+| `memory_store(content, scope, priority)` | Neue Erinnerung speichern (Priority 1-10, Default: auto nach Type) | Inhalt + Scope + Priority | Bestaetigung + Memory-ID |
 | `memory_list(scope)` | Alle Erinnerungen auflisten | Scope (long/short/all) | Liste aller Erinnerungen |
 | `memory_get(id)` | Einzelne Erinnerung abrufen | Memory-ID | Erinnerungs-Inhalt |
 | `memory_forget(id)` | Erinnerung loeschen | Memory-ID | Bestaetigung |
@@ -670,7 +670,7 @@ Agent beendet Antwort
 
 ### 4.3 Agentic RAG (Schicht 4) — AGENT-ONLY, LOKAL
 
-Steuert die Suchstrategie intelligent (Service: `agentic-rag`):
+Steuert die Suchstrategie intelligent (Service: `agentic_rag`):
 - **Router:** Entscheidet welche Schicht(en) abgefragt werden (S1/S2/S3/S6)
 - **Evaluator:** Bewertet Ergebnis-Qualitaet — gut genug oder Retry?
 - **Retry-Logik:** Bei schlechten Ergebnissen → andere Quelle, verfeinerte Query (max 3 Runden)
@@ -680,7 +680,7 @@ Steuert die Suchstrategie intelligent (Service: `agentic-rag`):
 
 ### 4.4 Agentic Learning Graphs (Schicht 5) — SHARED, CLOUD
 
-Erweitert das Wissensnetz automatisch (Service: `learning-graphs`):
+Erweitert das Wissensnetz automatisch (Service: `learning_graphs`):
 - **Pattern-Detection:** Erkennt wiederkehrende Muster (Tool-Kombinationen, Fehler)
 - **Graph-Updater:** SessionEnd-Hook → neue Knoten/Kanten in Neo4j
 - **Konsolidierung:** Woechentlicher Cronjob: S6 Rohdaten → Fakten → Neo4j
@@ -1153,8 +1153,9 @@ Bei Aenderungen bekommst du eine Notification.
 | Aktion | Befehl/URL |
 |--------|-----------|
 | Dashboard | http://IP:7474 |
-| Backup | `docker exec neo4j neo4j-admin database dump neo4j` |
-| Restore | `docker exec neo4j neo4j-admin database load neo4j` |
+| Backup (APOC) | `docker exec neo4j cypher-shell "CALL apoc.export.cypher.all('/backups/snap.cypher', {})"` |
+| Backup (dump) | `docker stop neo4j && docker exec neo4j neo4j-admin database dump neo4j` (Community: DB muss gestoppt sein!) |
+| Restore | `docker exec neo4j cypher-shell < backups/snap.cypher` (APOC) oder `neo4j-admin database load` (dump) |
 | Logs | `docker logs neo4j` |
 | Neustart | `docker restart neo4j` |
 
@@ -1162,7 +1163,7 @@ Bei Aenderungen bekommst du eine Notification.
 
 | Aktion | Befehl/URL |
 |--------|-----------|
-| Dashboard | http://IP:6333/dashboard |
+| Collections (API) | http://IP:6333/collections |
 | Collections | `curl http://IP:6333/collections` |
 | Snapshot | `curl -X POST http://IP:6333/collections/NAME/snapshots` |
 | Logs | `docker logs qdrant` |
@@ -1285,6 +1286,12 @@ Alle Funktionen werden mit eindeutiger ID registriert.
 | FN-061 | Doc-Scanner | URL aus Scan-Liste entfernen | URL/Nummer | Bestaetigung |
 | FN-062 | Doc-Scanner | URL-Einstellungen aendern | URL/Nummer + Parameter | Bestaetigung |
 | FN-063 | Doc-Scanner | Scanner-Konfiguration anzeigen/aendern | Config-Key + Wert | Bestaetigung |
+| FN-064 | HippoRAG-Service | Text ingesten (Entity-Extraktion → Neo4j) | Text + Metadaten | Anzahl extrahierter Entitaeten |
+| FN-065 | HippoRAG-Service | Wissen abrufen (PPR + Vektor-Suche) | Query | Top-K relevante Ergebnisse |
+| FN-066 | Learning-Graphs | Graph-Update nach Session | Session-Daten | Neue Knoten/Kanten |
+| FN-067 | Learning-Graphs | Konsolidierung ausfuehren | Zeitraum | Konsolidierungs-Report |
+| FN-068 | Learning-Graphs | Decay/Pruning ausfuehren | Schwellenwerte | Decay-Report |
+| FN-069 | Agentic RAG | Query routen + bewerten | Query + Kontext | Bewertetes Ergebnis + Quelle |
 
 ---
 
@@ -1301,6 +1308,9 @@ Beispiel-Struktur:
 | EP-001 | /api/auth/login | POST | User Login | email, password | JWT Token | Nein | — |
 | EP-002 | /api/auth/refresh | POST | Token erneuern | refresh_token | Neuer JWT | Ja | EP-001 |
 | EP-003 | /api/users | GET | Alle User listen | page, limit | User-Array | Ja | EP-001 |
+| EP-004 | /retrieve | POST | HippoRAG: Wissen abrufen (PPR) | query, top_k | Ranked Ergebnisse | Nein | — |
+| EP-005 | /ingest | POST | HippoRAG: Text ingesten | text, metadata | Entitaeten-Count | Nein | — |
+| EP-006 | /health | GET | HippoRAG: Service-Status | — | Status JSON | Nein | — |
 
 ---
 

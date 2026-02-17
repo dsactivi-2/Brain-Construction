@@ -88,15 +88,17 @@ bash scripts/health-check.sh
 
 ```bash
 # 1. Core Memory (Schicht 1) — immer im Kontext
+# Shared-Bloecke (user, projekt, entscheidungen) → werden zur Laufzeit aus Redis geladen
+# Agent-Only-Bloecke (fehler_log, aktuelle_arbeit) → bleiben lokal pro Agent
 mkdir -p ~/.claude
 cat > ~/.claude/core-memory.json << 'EOF'
 {
   "blocks": {
-    "user": { "value": "", "limit": 4000 },
-    "projekt": { "value": "", "limit": 4000 },
-    "entscheidungen": { "value": "", "limit": 4000 },
-    "fehler_log": { "value": "", "limit": 4000 },
-    "aktuelle_arbeit": { "value": "", "limit": 4000 }
+    "user": { "value": "", "limit": 4000, "storage": "redis" },
+    "projekt": { "value": "", "limit": 4000, "storage": "redis" },
+    "entscheidungen": { "value": "", "limit": 4000, "storage": "redis" },
+    "fehler_log": { "value": "", "limit": 4000, "storage": "local" },
+    "aktuelle_arbeit": { "value": "", "limit": 4000, "storage": "local" }
   }
 }
 EOF
@@ -216,15 +218,17 @@ bash scripts/health-check.sh
 
 ```bash
 # 1. Core Memory (Schicht 1) — immer im Kontext
+# Shared-Bloecke (user, projekt, entscheidungen) → werden zur Laufzeit aus Redis geladen
+# Agent-Only-Bloecke (fehler_log, aktuelle_arbeit) → bleiben lokal pro Agent
 mkdir -p ~/.claude
 cat > ~/.claude/core-memory.json << 'EOF'
 {
   "blocks": {
-    "user": { "value": "", "limit": 4000 },
-    "projekt": { "value": "", "limit": 4000 },
-    "entscheidungen": { "value": "", "limit": 4000 },
-    "fehler_log": { "value": "", "limit": 4000 },
-    "aktuelle_arbeit": { "value": "", "limit": 4000 }
+    "user": { "value": "", "limit": 4000, "storage": "redis" },
+    "projekt": { "value": "", "limit": 4000, "storage": "redis" },
+    "entscheidungen": { "value": "", "limit": 4000, "storage": "redis" },
+    "fehler_log": { "value": "", "limit": 4000, "storage": "local" },
+    "aktuelle_arbeit": { "value": "", "limit": 4000, "storage": "local" }
   }
 }
 EOF
@@ -381,15 +385,17 @@ Auch bei der Cloud-Variante wird das Gehirn-System **lokal** konfiguriert:
 
 ```bash
 # 1. Core Memory (Schicht 1) — immer im Kontext
+# Shared-Bloecke (user, projekt, entscheidungen) → werden zur Laufzeit aus Redis geladen
+# Agent-Only-Bloecke (fehler_log, aktuelle_arbeit) → bleiben lokal pro Agent
 mkdir -p ~/.claude
 cat > ~/.claude/core-memory.json << 'EOF'
 {
   "blocks": {
-    "user": { "value": "", "limit": 4000 },
-    "projekt": { "value": "", "limit": 4000 },
-    "entscheidungen": { "value": "", "limit": 4000 },
-    "fehler_log": { "value": "", "limit": 4000 },
-    "aktuelle_arbeit": { "value": "", "limit": 4000 }
+    "user": { "value": "", "limit": 4000, "storage": "redis" },
+    "projekt": { "value": "", "limit": 4000, "storage": "redis" },
+    "entscheidungen": { "value": "", "limit": 4000, "storage": "redis" },
+    "fehler_log": { "value": "", "limit": 4000, "storage": "local" },
+    "aktuelle_arbeit": { "value": "", "limit": 4000, "storage": "local" }
   }
 }
 EOF
