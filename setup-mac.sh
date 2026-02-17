@@ -295,20 +295,128 @@ for dir in agents/*/; do
 done
 
 # ============================================================
-# SCHRITT 7: Claude Code Hooks einrichten
+# SCHRITT 7: Claude Code Konfiguration (Projekt-Level)
 # ============================================================
 step "Schritt 7/7: Claude Code Konfiguration"
 
-CLAUDE_DIR="$HOME/.claude"
-mkdir -p "$CLAUDE_DIR"
+# --- 7a: PROJEKT-Settings (.claude/settings.json im Repo) ---
+# Das ist die WICHTIGE Datei — MCP Server + Hooks + Permissions
+PROJECT_CLAUDE_DIR="$INSTALL_DIR/.claude"
+mkdir -p "$PROJECT_CLAUDE_DIR"
 
-# settings.json erstellen/aktualisieren falls noetig
-if [ -f "$CLAUDE_DIR/settings.json" ]; then
-    ok "Claude settings.json existiert bereits"
-    info "Manuelle Anpassung evtl. noetig fuer Hooks"
+info "Schreibe Projekt-Settings: $PROJECT_CLAUDE_DIR/settings.json"
+info "  (MCP brain-tools Server + 12 Hook-Definitionen)"
+
+cat > "$PROJECT_CLAUDE_DIR/settings.json" << SETTINGSEOF
+{
+  "mcpServers": {
+    "brain-tools": {
+      "command": "python3",
+      "args": ["${INSTALL_DIR}/mcp-servers/brain-tools/server.py"],
+      "cwd": "${INSTALL_DIR}",
+      "env": {
+        "BRAIN_DIR": "${INSTALL_DIR}/brain",
+        "CONFIG_DIR": "${INSTALL_DIR}/config",
+        "HF_HUB_DISABLE_SYMLINKS_WARNING": "1",
+        "TOKENIZERS_PARALLELISM": "false"
+      }
+    }
+  },
+  "hooks": {
+    "SessionStart": [
+      {"type": "command", "command": "bash ${INSTALL_DIR}/hooks/session-start-startup.sh", "timeout": 15000},
+      {"type": "command", "command": "bash ${INSTALL_DIR}/hooks/core-memory-inject.sh", "timeout": 10000}
+    ],
+    "UserPromptSubmit": [
+      {"type": "command", "command": "bash ${INSTALL_DIR}/hooks/user-prompt-submit.sh", "timeout": 5000},
+      {"type": "command", "command": "bash ${INSTALL_DIR}/hooks/auto-recall.sh", "timeout": 8000}
+    ],
+    "PreToolUse": [
+      {"matcher": "Write|Edit", "type": "agent", "prompt": "Pruefe ob diese Code-Aenderung sicher ist. Keine Secrets, keine Injection, keine gefaehrlichen Patterns.", "timeout": 30000},
+      {"matcher": "Bash", "type": "agent", "prompt": "Pruefe ob dieser Bash-Befehl sicher ist. Blockiere: rm -rf /, DROP TABLE, --force auf main/master, Secrets in Befehlen.", "timeout": 30000}
+    ],
+    "PostToolUse": [
+      {"matcher": "Write|Edit", "type": "command", "command": "bash ${INSTALL_DIR}/hooks/post-tool-write.sh", "timeout": 30000},
+      {"matcher": "Bash", "type": "command", "command": "bash ${INSTALL_DIR}/hooks/post-tool-bash.sh", "timeout": 10000}
+    ],
+    "PostToolUseFailure": [
+      {"type": "command", "command": "bash ${INSTALL_DIR}/hooks/post-tool-failure.sh", "timeout": 10000}
+    ],
+    "PreCompact": [
+      {"type": "command", "command": "bash ${INSTALL_DIR}/hooks/pre-compact.sh", "timeout": 15000}
+    ],
+    "Stop": [
+      {"type": "agent", "prompt": "Pruefe ob alle zugewiesenen Tasks erledigt sind. Kein Task darf uebersprungen oder als erledigt markiert sein ohne tatsaechlich erledigt zu sein.", "timeout": 60000},
+      {"type": "command", "command": "bash ${INSTALL_DIR}/hooks/auto-capture.sh", "timeout": 10000}
+    ],
+    "SubagentStart": [
+      {"type": "command", "command": "bash ${INSTALL_DIR}/hooks/subagent-start.sh", "timeout": 10000}
+    ],
+    "SubagentStop": [
+      {"type": "agent", "prompt": "Pruefe die Qualitaet der Subagent-Ausgabe. Ist die Aufgabe vollstaendig und korrekt erledigt?", "timeout": 60000}
+    ],
+    "Notification": [
+      {"type": "command", "command": "bash ${INSTALL_DIR}/hooks/notification.sh", "timeout": 10000}
+    ],
+    "TaskCompleted": [
+      {"type": "agent", "prompt": "Verifiziere dass dieser Task WIRKLICH erledigt ist. Pruefe: Code geschrieben? Tests bestanden? Review OK? Nichts uebersprungen?", "timeout": 60000}
+    ],
+    "SessionEnd": [
+      {"type": "command", "command": "bash ${INSTALL_DIR}/hooks/session-end-recall.sh", "timeout": 20000}
+    ]
+  }
+}
+SETTINGSEOF
+
+ok "Projekt-Settings geschrieben (MCP + 12 Hooks)"
+
+# --- 7b: Hook-Script Stubs erstellen (falls nicht vorhanden) ---
+HOOKS_DIR="$INSTALL_DIR/hooks"
+mkdir -p "$HOOKS_DIR"
+
+HOOK_SCRIPTS=(
+    "session-start-startup.sh"
+    "core-memory-inject.sh"
+    "user-prompt-submit.sh"
+    "auto-recall.sh"
+    "post-tool-write.sh"
+    "post-tool-bash.sh"
+    "post-tool-failure.sh"
+    "pre-compact.sh"
+    "auto-capture.sh"
+    "subagent-start.sh"
+    "notification.sh"
+    "session-end-recall.sh"
+)
+
+CREATED_HOOKS=0
+for hook in "${HOOK_SCRIPTS[@]}"; do
+    if [ ! -f "$HOOKS_DIR/$hook" ]; then
+        cat > "$HOOKS_DIR/$hook" << HOOKEOF
+#!/bin/bash
+# Hook: $hook
+# TODO: Implementierung folgt
+# Siehe docs/01-PROJEKTPLANUNG.md fuer Details
+exit 0
+HOOKEOF
+        chmod +x "$HOOKS_DIR/$hook"
+        CREATED_HOOKS=$((CREATED_HOOKS + 1))
+    fi
+done
+
+if [ $CREATED_HOOKS -gt 0 ]; then
+    ok "$CREATED_HOOKS Hook-Stubs erstellt in hooks/"
 else
-    info "Erstelle minimale Claude settings.json..."
-    cat > "$CLAUDE_DIR/settings.json" << 'SETTINGSEOF'
+    ok "Alle Hook-Scripts existieren bereits"
+fi
+
+# --- 7c: User-Level Permissions (optional, fuer Komfort) ---
+USER_CLAUDE_DIR="$HOME/.claude"
+mkdir -p "$USER_CLAUDE_DIR"
+
+if [ ! -f "$USER_CLAUDE_DIR/settings.json" ]; then
+    info "Erstelle User-Level Permissions..."
+    cat > "$USER_CLAUDE_DIR/settings.json" << 'USERSETTINGSEOF'
 {
   "permissions": {
     "allow": [
@@ -322,8 +430,11 @@ else
     "deny": []
   }
 }
-SETTINGSEOF
-    ok "settings.json erstellt (Brain-Tools auto-allowed)"
+USERSETTINGSEOF
+    ok "User-Settings erstellt (Brain-Tools auto-allowed)"
+else
+    ok "User-Settings existieren bereits (nicht ueberschrieben)"
+    info "Tipp: mcp__brain-tools__* zu permissions.allow hinzufuegen falls fehlend"
 fi
 
 # ============================================================
