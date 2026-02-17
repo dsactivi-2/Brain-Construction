@@ -180,6 +180,30 @@ Alle 4 muessen laufen BEVOR Schritt 2 beginnt.
 
 > **Siehe auch:** 04-INSTALLATIONS-GUIDE.md fuer die Schritt-fuer-Schritt Installation der Datenbanken.
 
+### 1.6 Shared/Cloud vs. Agent-Only/Lokal Architektur
+
+Bei 30-40 parallelen Agenten: Shared-Daten in Cloud-DBs, Agent-Only lokal.
+
+```
+CLOUD (Shared — alle 30-40 Agenten):
+├── Redis          → Core Memory Shared + Task-Queue + Event-Bus + Warm-Up Cache
+├── Qdrant         → Auto-Recall Vektoren (S2) + HippoRAG Embeddings (S3)
+├── Neo4j          → Wissensgraph (S3) + Learning Graphs (S5)
+└── PostgreSQL     → Recall Memory (S6), Connection Pool: 40
+
+LOKAL (Agent-Only — isoliert pro Agent):
+├── agents/agent-XXX-core.json → [AKTUELLE-ARBEIT], [FEHLER-LOG]
+├── Agentic RAG Logik          → Router + Evaluator (S4)
+├── Daily Notes                → Markdown auf Disk
+└── Session State              → Nur waehrend Session
+```
+
+**Core Memory Split:**
+- Shared-Bloecke ([USER], [PROJEKT], [ENTSCHEIDUNGEN]) → Redis
+  Nur Admin/Berater schreibt, alle Agenten lesen
+- Agent-Only-Bloecke ([AKTUELLE-ARBEIT], [FEHLER-LOG]) → lokale JSON
+  Nur dieser Agent liest + schreibt, keine Locking-Probleme
+
 ---
 
 ## Schritt 2: Gehirn-System
@@ -863,6 +887,234 @@ ls -la ~/.claude/hooks/session-end-recall.sh
 
 > **Siehe auch:** 01-PROJEKTPLANUNG.md Abschnitt Gehirn-System fuer die vollstaendige Schichten-Architektur. 03-SETUP-ANLEITUNG.md fuer detaillierte Konfigurationseinstellungen.
 
+### 2.8 HippoRAG-Service (Schicht 3 — Implementierung)
+
+**Zweck:** PersonalizedPageRank-Algorithmus fuer den Wissensgraphen
+
+**Befehle:**
+```bash
+cd ~/claude-agent-team/brain
+mkdir -p hipporag-service && cd hipporag-service
+
+# Struktur erstellen
+cat > entity_extractor.py << 'PYEOF'
+"""LLM extrahiert Entitaeten + Beziehungen aus Text → Neo4j"""
+# Eingehender Text → LLM-Prompt → (Subjekt, Praedikat, Objekt) Tripel
+# Tripel → Neo4j MERGE Statements
+PYEOF
+
+cat > ppr.py << 'PYEOF'
+"""PersonalizedPageRank ueber Neo4j Wissensgraph"""
+# Query → Seed-Knoten identifizieren → PPR laufen lassen
+# Top-K Knoten + zugehoerige Vektoren aus Qdrant zurueckgeben
+PYEOF
+
+cat > retriever.py << 'PYEOF'
+"""Query → PPR → Qdrant → Top-K relevante Ergebnisse"""
+# Kombination: Graph-Traversal (Neo4j) + Vektor-Aehnlichkeit (Qdrant)
+# Ergebnis: Ranked Liste von Wissens-Chunks
+PYEOF
+
+cat > server.py << 'PYEOF'
+"""MCP/REST Endpoint fuer HippoRAG-Service"""
+# POST /retrieve → Query → retriever.py → Top-K Ergebnisse
+# POST /ingest   → Text → entity_extractor.py → Neo4j + Qdrant
+PYEOF
+```
+
+**Pruefung:** `curl http://localhost:8102/health` gibt `{"status": "ok"}`
+**Fehlerbehandlung:** Neo4j/Qdrant nicht erreichbar → Degraded Mode Warnung
+**Rollback:** `rm -rf ~/claude-agent-team/brain/hipporag-service`
+
+### 2.9 Agentic RAG (Schicht 4 — Implementierung)
+
+**Zweck:** Intelligente Suchsteuerung — entscheidet WO und WIE gesucht wird
+
+**Befehle:**
+```bash
+cd ~/claude-agent-team/brain
+mkdir -p agentic-rag && cd agentic-rag
+
+cat > router.py << 'PYEOF'
+"""Entscheidet welche Schicht(en) abgefragt werden"""
+# Einfache Faktenfrage → S1 (Core Memory) zuerst
+# Semantische Suche → S2 (Auto-Recall, Qdrant)
+# Komplexe Zusammenhaenge → S3 (HippoRAG, Neo4j + Qdrant)
+# Historische Frage → S6 (Recall Memory, PostgreSQL)
+# Unbekannt → Multi-Source: S2 + S3 + S6 parallel
+PYEOF
+
+cat > evaluator.py << 'PYEOF'
+"""Bewertet ob Suchergebnis gut genug ist"""
+# Relevanz-Score < Schwellenwert → Retry mit anderer Quelle
+# Konfidenz-Check: Sind die Top-3 Ergebnisse konsistent?
+# Bei Widerspruch → alle Quellen abfragen + LLM entscheidet
+PYEOF
+
+cat > feedback.py << 'PYEOF'
+"""Feedback-Loop: Falsches Wissen korrigieren"""
+# Agent markiert Ergebnis als "veraltet" oder "falsch"
+# Priority-Score des Eintrags sinkt
+# Decay wird beschleunigt → Eintrag wird frueher geprunt
+PYEOF
+
+cat > orchestrator.py << 'PYEOF'
+"""Multi-Step Orchestrierung: Suche → Bewerte → Verfeinere"""
+# Schritt 1: Router waehlt Quellen
+# Schritt 2: Parallele Abfrage
+# Schritt 3: Evaluator bewertet
+# Schritt 4: Falls noetig → Retry mit verfeinerter Query
+# Max 3 Retry-Runden, dann bestes Ergebnis zurueckgeben
+PYEOF
+```
+
+**Pruefung:** `python3 -c "from agentic_rag.router import route_query; print('Agentic RAG: OK')"`
+**Fehlerbehandlung:** Bei Ausfall einzelner Schichten → Degraded Mode (verfuegbare Quellen nutzen)
+**Rollback:** `rm -rf ~/claude-agent-team/brain/agentic-rag`
+
+### 2.10 Learning Graphs (Schicht 5 — Implementierung)
+
+**Zweck:** Selbst-erweiterendes Wissensnetz — waechst mit jeder Session
+
+**Befehle:**
+```bash
+cd ~/claude-agent-team/brain
+mkdir -p learning-graphs && cd learning-graphs
+
+cat > pattern_detector.py << 'PYEOF'
+"""Erkennt wiederkehrende Muster aus Agenten-Interaktionen"""
+# Analysiert: Welche Tools werden oft zusammen genutzt?
+# Welche Fehler treten wiederholt auf?
+# Welche Entscheidungen wurden revidiert?
+PYEOF
+
+cat > graph_updater.py << 'PYEOF'
+"""SessionEnd-Hook → neue Knoten/Kanten in Neo4j"""
+# Jede Session erzeugt: Genutzte Tools, Entscheidungen, Ergebnisse
+# Neue Kanten: "Tool A wurde nach Tool B genutzt" (Workflow-Pattern)
+# Neue Knoten: Gelernte Fakten, Fehler-Muster
+PYEOF
+
+cat > consolidator.py << 'PYEOF'
+"""Woechentlicher Cronjob: Verdichte + Prune den Graph"""
+# Konsolidierung: S6 Rohdaten → Fakten extrahieren → Neo4j
+# Decay: Score sinkt fuer Eintraege >90 Tage ohne Abruf
+# Prune: Eintraege unter Schwellenwert → Archiv/Loeschung
+# Snapshot VOR Konsolidierung (Rollback moeglich)
+PYEOF
+```
+
+**Pruefung:** `python3 -c "from learning_graphs.graph_updater import update_graph; print('Learning Graphs: OK')"`
+**Fehlerbehandlung:** Neo4j nicht erreichbar → Aenderungen lokal puffern, spaeter synchronisieren
+**Rollback:** `rm -rf ~/claude-agent-team/brain/learning-graphs`
+
+### 2.11 Gehirn-Mechanismen
+
+#### Konsolidierung (Cronjob — wie Schlaf)
+```bash
+# Cronjob einrichten (woechentlich Sonntag 03:00)
+crontab -e
+# Eintrag:
+0 3 * * 0 cd ~/claude-agent-team/brain && python3 learning-graphs/consolidator.py --mode=consolidate 2>&1 >> logs/consolidation.log
+
+# Was passiert:
+# 1. Graph-Snapshot erstellen (neo4j-admin dump)
+# 2. S6 (PostgreSQL) → Letzte 7 Tage Konversationen lesen
+# 3. LLM extrahiert Fakten + Beziehungen
+# 4. Neue Knoten/Kanten → Neo4j (S3/S5)
+# 5. Log schreiben
+```
+
+#### Decay/Pruning (Cronjob — aktives Vergessen)
+```bash
+# Cronjob einrichten (taeglich 04:00)
+0 4 * * * cd ~/claude-agent-team/brain && python3 learning-graphs/consolidator.py --mode=decay 2>&1 >> logs/decay.log
+
+# Was passiert:
+# 1. Alle Eintraege pruefen: Letzter Abruf > 90 Tage?
+# 2. Ja → Priority-Score um 1 senken
+# 3. Score < 2 → In Archiv verschieben
+# 4. Archiv > 180 Tage → Endgueltig loeschen
+```
+
+#### Priority-Scoring
+```bash
+# Wird automatisch bei jedem memory_store gesetzt:
+# Blocker beantwortet → Score 9
+# Bug gefixt → Score 8
+# Architektur-Entscheidung → Score 9
+# Feature implementiert → Score 6
+# Routine-Commit → Score 2
+# Standard-Log → Score 1
+
+# Auto-Recall (S2) sortiert nach Score: Hoehere zuerst
+# Context-Budget: Max 3.000 Tokens → Top-K nach Score
+```
+
+### 2.12 Betriebsmechanismen (30-40 Agenten)
+
+#### Cross-Agent Event-Bus
+```bash
+# Redis Pub/Sub Kanaele einrichten
+redis-cli -a SICHERES_PASSWORT << 'REDIS'
+# Kanaele werden automatisch bei erstem PUBLISH erstellt:
+# bugs       → Agent meldet Bug-Fund
+# decisions  → Architektur-Entscheidung getroffen
+# progress   → Fortschritts-Update
+# blocker    → Agent ist blockiert, braucht Hilfe
+REDIS
+
+# Agenten subscriben auf relevante Kanaele via Hook
+```
+
+#### Warm-Up Bundle
+```bash
+# Redis Key fuer Schnellstart-Paket pro Projekt
+redis-cli -a SICHERES_PASSWORT << 'REDIS'
+# Struktur: warmup:<projekt-id>
+# Inhalt: Core Memory Shared + Top-20 Erinnerungen + Task-Queue
+# Wird bei jeder Aenderung an Shared-Daten aktualisiert
+# Agent-Start: 1x HGET warmup:<projekt-id> → <100ms einsatzbereit
+REDIS
+```
+
+#### Degraded Mode
+```bash
+# Health-Check erweitert: Prueft jede DB + setzt Degraded-Flags
+# Neo4j down  → Flag: HIPPORAG_DISABLED=true, S3/S5 deaktiviert
+# Qdrant down → Flag: VECTOR_SEARCH_DISABLED=true, S2 nur Redis
+# Redis down  → Flag: CACHE_DISABLED=true, direkte DB-Queries
+# PG down     → Flag: RECALL_FALLBACK=sqlite, SQLite WAL lokal
+
+# Agent bekommt im Kontext:
+# "WARNUNG: Eingeschraenkter Modus — [Neo4j] nicht erreichbar.
+#  Schicht 3 (HippoRAG) und Schicht 5 (Learning Graphs) deaktiviert."
+```
+
+#### Conflict Resolution
+```bash
+# Hierarchie fuer Shared-Writes:
+# Berater (10) > Architekt (9) > Coder (7) > Tester (6) >
+# Reviewer (5) > Designer (4) > Analyst (3) > Doc-Scanner (2) >
+# DevOps (2) > Dokumentierer (1)
+#
+# Bei Konflikt: Hoechste Hierarchie gewinnt
+# Bei gleicher Ebene: Juengster Eintrag gewinnt
+# Unloesbar: Automatische Blocker-Frage an Admin/Supervisor
+```
+
+#### Versioning / Graph-Rollback
+```bash
+# Snapshot vor jeder Konsolidierung
+neo4j-admin dump --database=neo4j --to-path=backups/graph-$(date +%Y%m%d).dump
+
+# Max 7 Snapshots behalten (aeltere rotieren)
+ls -t backups/graph-*.dump | tail -n +8 | xargs rm -f
+
+# Rollback bei vergiftetem Graph:
+neo4j-admin load --database=neo4j --from-path=backups/graph-DATUM.dump --overwrite-destination
+```
+
 ---
 
 ## Schritt 3: MCP-Server
@@ -1293,6 +1545,30 @@ services:
     environment:
       RAG_API_URL: http://rag-api:8100
 
+  hipporag:
+    build: ./brain/hipporag-service
+    container_name: hipporag
+    restart: always
+    ports:
+      - "8102:8102"
+    depends_on:
+      - neo4j
+      - qdrant
+    environment:
+      NEO4J_URI: bolt://neo4j:7687
+      NEO4J_PASSWORD: ${NEO4J_PASSWORD}
+      QDRANT_URL: http://qdrant:6333
+
+  learning-graphs:
+    build: ./brain/learning-graphs
+    container_name: learning-graphs
+    restart: always
+    depends_on:
+      - neo4j
+    environment:
+      NEO4J_URI: bolt://neo4j:7687
+      NEO4J_PASSWORD: ${NEO4J_PASSWORD}
+
   # --- Optionale Services ---
   # Ollama (lokales LLM, z.B. fuer Embedding oder Extraktion)
   # Auskommentieren und anpassen falls benoetigt:
@@ -1382,6 +1658,24 @@ curl -s http://localhost:8100/health > /dev/null && echo "OK" || echo "FEHLER"
 # Doc-Scanner
 echo -n "Doc-Scanner: "
 curl -s http://localhost:8101/health > /dev/null && echo "OK" || echo "FEHLER"
+
+# HippoRAG-Service
+echo -n "HippoRAG: "
+curl -s http://localhost:8102/health > /dev/null && echo "OK" || echo "FEHLER (Degraded: S3/S5 deaktiviert)"
+
+# Learning-Graphs
+echo -n "Learning-Graphs: "
+docker exec learning-graphs python3 -c "print('OK')" 2>/dev/null && echo "OK" || echo "FEHLER (Degraded: S5 deaktiviert)"
+
+# Degraded Mode Check
+echo ""
+echo "=== Degraded Mode Status ==="
+DEGRADED=false
+curl -s http://localhost:7474 > /dev/null || { echo "WARNUNG: Neo4j down → S3/S5 deaktiviert"; DEGRADED=true; }
+curl -s http://localhost:6333 > /dev/null || { echo "WARNUNG: Qdrant down → S2 nur Redis-Cache"; DEGRADED=true; }
+docker exec redis redis-cli -a "$REDIS_PASSWORD" ping 2>/dev/null | grep -q PONG || { echo "WARNUNG: Redis down → Kein Cache/Event-Bus"; DEGRADED=true; }
+docker exec recall-db pg_isready -U recall_user -d recall_memory > /dev/null 2>&1 || { echo "WARNUNG: PostgreSQL down → SQLite Fallback"; DEGRADED=true; }
+$DEGRADED || echo "Alle Systeme normal — kein Degraded Mode"
 
 echo "=== Ende ==="
 HEALTHEOF

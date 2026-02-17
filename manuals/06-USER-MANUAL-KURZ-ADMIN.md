@@ -35,8 +35,9 @@ Agenten, Datenbanken, Server, Einstellungen und Kosten.
   |    +---> DevOps         (Server + Deployment)             |
   |    +---> Dokumentierer  (schreibt Anleitungen)            |
   |                                                           |
-  |   [ Brain: HippoRAG 2 + Wissensgraphen ]                 |
-  |   [ Datenbanken: Neo4j | Qdrant | Redis | PostgreSQL ]   |
+  |   [ Brain: HippoRAG 2 + Agentic RAG + Learning Graphs ]  |
+  |   [ Cloud: Neo4j | Qdrant | Redis | PostgreSQL (Shared)] |
+  |   [ Lokal: Agent-Core JSON (Agent-Only) ]                |
   |   [ 17 Hooks = automatische Regeln ]                     |
   +-----------------------------------------------------------+
 ```
@@ -336,6 +337,8 @@ So kennt das Team immer die neueste Dokumentation.
 /scan URL                        Webseite jetzt sofort scannen
 /scan-diff URL                   Was hat sich geaendert?
 /kb-import PFAD global|projekt   Lokale Datei importieren (PDF, MD, YAML)
+/scan-remove URL|NUMMER          Ueberwachte Webseite entfernen
+/scan-edit URL|NUMMER --PARAM W  Einstellungen einer Webseite aendern
 /scan-config KEY WERT            Einstellung aendern
 ```
 
@@ -371,6 +374,15 @@ Dein Team vergisst NIE etwas. Es hat 6 Arten von Gedaechtnis:
 **Einfach gesagt:** Schicht 1+2 sind immer da (wie dein Kurzzeitgedaechtnis).
 Schicht 3-6 werden bei Bedarf geholt (wie Nachschlagen im Buch).
 
+**Shared vs. Agent-Only:**
+- Shared (Cloud): Alle 30-40 Agenten teilen Wissen (Redis, Neo4j, Qdrant, PostgreSQL)
+- Agent-Only (Lokal): Jeder Agent hat eigene Notizen ([AKTUELLE-ARBEIT], [FEHLER-LOG])
+
+**Das Gehirn lernt und vergisst wie ein Mensch:**
+- Konsolidierung: Woechentlich werden Rohdaten zu Wissen verdichtet
+- Vergessen: Ungenutzte Erinnerungen verlieren an Relevanz (nach 90 Tagen)
+- Gewichtung: Wichtige Erinnerungen (Score 9) werden bevorzugt geladen
+
 **Befehle nach Schicht:**
 
 ```
@@ -394,23 +406,28 @@ Schicht 6 — Recall Memory:
 
 ## 11. Datenbanken verwalten (nur Admin)
 
-Das System nutzt 4 Datenbanken:
+Das System nutzt 4 Cloud-Datenbanken (Shared) + lokale Dateien (Agent-Only):
 
 ```
+  CLOUD (Shared — alle 30-40 Agenten):
   +------------------+------------------------------------+
-  |    Datenbank     |    Wofuer?                         |
-  +------------------+------------------------------------+
-  |    Neo4j         |    Wissen + Zusammenhaenge         |
+  |    Neo4j         |    Wissen + Zusammenhaenge (S3/S5) |
   |    (Graph)       |    "Wer kennt wen?"                |
   +------------------+------------------------------------+
-  |    Qdrant        |    Aehnliche Inhalte finden        |
+  |    Qdrant        |    Aehnliche Inhalte finden (S2/S3)|
   |    (Vektor)      |    "Was passt zu meiner Frage?"    |
   +------------------+------------------------------------+
-  |    Redis         |    Schneller Zwischenspeicher      |
-  |    (Cache)       |    "Was wurde gerade benutzt?"     |
+  |    Redis         |    Shared Cache + Event-Bus        |
+  |    (Cache)       |    Core Memory Shared + Warm-Up    |
   +------------------+------------------------------------+
-  |  PostgreSQL/     |    Komplette Chat-Historie         |
-  |  SQLite          |    speichern (Recall Memory)       |
+  |    PostgreSQL    |    Komplette Chat-Historie (S6)    |
+  |    (Relational)  |    Connection Pool: 40 Agenten     |
+  +------------------+------------------------------------+
+
+  LOKAL (Agent-Only — pro Agent):
+  +------------------+------------------------------------+
+  |  Agent-Core JSON |    [AKTUELLE-ARBEIT], [FEHLER-LOG] |
+  |  (Datei)         |    Nur dieser Agent, 0.04ms        |
   +------------------+------------------------------------+
 ```
 
@@ -494,6 +511,8 @@ Das System nutzt 4 Datenbanken:
 | `/scan`            | URL sofort scannen                        |
 | `/scan-diff`       | Aenderungen seit letztem Scan zeigen      |
 | `/kb-import`       | Lokale Dateien in KB importieren          |
+| `/scan-remove`     | Ueberwachte URL entfernen                 |
+| `/scan-edit`       | Einstellungen einer URL aendern           |
 | `/scan-config`     | Scanner-Konfiguration anzeigen/aendern    |
 
 **Admin Shell-Befehle (System-Commands, keine Agent-Commands):**

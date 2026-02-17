@@ -249,18 +249,37 @@ qdrant:
 
 redis:
   url: redis://:DEIN_REDIS_PASSWORT@localhost:6379/0
+  # Redis wird auch genutzt fuer:
+  # - Core Memory Shared ([USER], [PROJEKT], [ENTSCHEIDUNGEN])
+  # - Event-Bus (Pub/Sub: bugs, decisions, progress, blocker)
+  # - Warm-Up Bundle (Schnellstart fuer neue Agenten)
+  # - Task-Queue + Fragenkatalog
 
 recall_memory:
-  type: postgresql                     # oder sqlite
+  type: postgresql                     # oder sqlite (nur Entwicklung/Offline)
   host: localhost
   port: 5432
   database: recall_memory
   user: recall_user
   password: SICHERES_PASSWORT
+  pool_size: 40                        # fuer 30-40 parallele Agenten
+  max_overflow: 20                     # Spitzen abfangen
 
 embedding:
   model: all-MiniLM-L6-v2             # lokal, gratis, schnell
   # alternativ: text-embedding-3-small # OpenAI, besser aber kostet
+
+# --- Neue Services ---
+hipporag:
+  url: http://localhost:8102           # PersonalizedPageRank Service
+  # Nutzt: Neo4j (Graph-Traversal) + Qdrant (Vektor-Suche)
+
+learning_graphs:
+  neo4j_uri: bolt://localhost:7687     # Gleiche Neo4j-Instanz wie HippoRAG
+  consolidation_schedule: "0 3 * * 0"  # Woechentlich Sonntag 03:00
+  decay_schedule: "0 4 * * *"          # Taeglich 04:00
+  decay_threshold_days: 90             # Score sinkt nach 90 Tagen ohne Abruf
+  archive_threshold_days: 180          # Archiv-Eintraege nach 180 Tagen loeschen
 EOF
 ```
 
@@ -815,16 +834,26 @@ docs.deinedomain.com {
 
 Das vollstaendige Gehirn-System besteht aus 6 Schichten:
 
-| Schicht | Name | Setup-Abschnitt | Speicher | Zweck |
-|:-------:|------|:---------:|----------|-------|
-| **S1** | Core Memory | 2.5 | JSON-Datei | Persistenter Kontext — immer im Agenten-Kontext geladen |
-| **S2** | Auto-Recall/Capture (Mem0) | 2.6 | Qdrant / Mem0 Cloud | Automatisches Erinnern + Speichern von Fakten |
-| **S3** | HippoRAG 2 | 2.1 + 2.2 | Neo4j + Qdrant | Wissensgraph + PageRank — strukturiertes Langzeitwissen |
-| **S4** | Agentic RAG | — (automatisch) | — | Intelligente Suche-Steuerung: WANN, WO, WIE suchen |
-| **S5** | Agentic Learning Graphs | — (automatisch) | Neo4j | Agent baut eigenes Wissensnetz — selbst-erweiternd |
-| **S6** | Recall Memory | 2.7 | PostgreSQL / SQLite | Komplette rohe Konversationshistorie |
+| Schicht | Name | Speicher | Shared/Agent | Lokal/Cloud | Zweck |
+|:-------:|------|----------|:------------:|:-----------:|-------|
+| **S1** | Core Memory | JSON + Redis | Shared + Agent-Only | Beides | Persistenter Kontext — immer geladen |
+| **S2** | Auto-Recall/Capture | Qdrant + Redis | Shared | Cloud | Automatisches Erinnern + Speichern (mit Priority-Score) |
+| **S3** | HippoRAG 2 | Neo4j + Qdrant | Shared | Cloud | Wissensgraph + PPR — hipporag-service |
+| **S4** | Agentic RAG | Prozess (lokal) | Agent-Only | Lokal | Router + Evaluator + Retry — agentic-rag Service |
+| **S5** | Learning Graphs | Neo4j | Shared | Cloud | Selbst-erweiternd — learning-graphs Service |
+| **S6** | Recall Memory | PostgreSQL | Shared | Cloud | Rohe Konversationshistorie (Pool-Size 40) |
 
-**Schichten S4 und S5** erfordern kein eigenes Setup — sie nutzen die bestehenden Datenbanken (Neo4j, Qdrant) und werden durch die Agenten-Logik automatisch gesteuert.
+**Core Memory Split:** [USER], [PROJEKT], [ENTSCHEIDUNGEN] → Redis (Shared).
+[AKTUELLE-ARBEIT], [FEHLER-LOG] → lokale JSON pro Agent (Agent-Only).
+
+**Neue Services:** hipporag-service (S3), agentic-rag (S4), learning-graphs (S5)
+erfordern eigenes Setup — siehe 02-RUNBOOK.md Schritte 2.8–2.10.
+
+**Gehirn-Mechanismen:** Konsolidierung (woechentlich), Decay/Pruning (taeglich),
+Priority-Scoring (automatisch) — siehe 02-RUNBOOK.md Schritt 2.11.
+
+**Betriebsmechanismen (30-40 Agenten):** Event-Bus, Warm-Up Bundle,
+Degraded Mode, Conflict Resolution, Versioning — siehe 02-RUNBOOK.md Schritt 2.12.
 
 ---
 

@@ -480,12 +480,16 @@ Alle Hooks laufen automatisch. Command-type Hooks laufen ausserhalb von Claudes 
 │  └─────────────────────────────────────────────────────────┘ │
 └─────────────────────────────────────────────────────────────┘
 
-Datenbanken:
+Datenbanken (alle Cloud, 30-40 Agenten parallel):
 ├── Neo4j            → Wissensgraph (Entitaeten + Beziehungen)
-├── Qdrant           → Vektor-Embeddings (semantische Suche)
-├── Redis            → Cache + Queue (Geschwindigkeit)
-├── PostgreSQL/SQLite→ Recall Memory (rohe Konversationshistorie)
-└── core-memory.json → Core Memory (immer geladen)
+├── Qdrant           → Vektor-Embeddings (semantische Suche, HNSW-Index)
+├── Redis            → Shared Cache + Queue (loest Parallel-Access fuer 30-40 Agenten)
+├── PostgreSQL       → Recall Memory (Konversationshistorie, Connection Pooling)
+└── core-memory.json → Core Memory (immer geladen, lokal)
+
+Lokal-Fallback (Entwicklung / Offline):
+├── SQLite + WAL     → Recall Memory Fallback (PRAGMA journal_mode=WAL)
+└── SQLite-Vec       → Vektor-Fallback (<2k Chunks)
 
 Shared: Alle Agenten, alle Rechner, alle Sessions
 ```
@@ -495,10 +499,15 @@ Shared: Alle Agenten, alle Rechner, alle Sessions
 #### Schicht 1: Core Memory (~20.000 Zeichen, ~5.000 Tokens)
 - Immer im Context Window gepinnt, bei jedem LLM-Aufruf sichtbar
 - Agent muss NICHT suchen — Wissen ist sofort da
-- Strukturierte Bloecke: [USER], [PROJEKT], [ENTSCHEIDUNGEN], [FEHLER-LOG], [AKTUELLE-ARBEIT]
+- Aufgeteilt in Shared + Agent-Only:
+  - **Shared** (Redis, alle Agenten lesen, nur Admin/Berater schreibt):
+    [USER], [PROJEKT], [ENTSCHEIDUNGEN] — max 3.000 Tokens
+  - **Agent-Only** (lokal JSON, nur dieser Agent liest + schreibt):
+    [AKTUELLE-ARBEIT], [FEHLER-LOG] — max 2.000 Tokens
 - Agent kann lesen + schreiben (core_memory_update, core_memory_read)
-- Gespeichert in: core-memory.json
-- Geladen durch: SessionStart-Hook
+- Shared geladen aus: Redis (Warm-Up Bundle, <5ms)
+- Agent-Only geladen aus: `agents/agent-XXX-core.json` (lokal, 0.04ms)
+- Geladen durch: SessionStart-Hook (merged Shared + Agent-Only)
 - Wie CPU-Register / L1-Cache
 
 #### Schicht 2: Auto-Recall + Auto-Capture (Mem0-Prinzip)
@@ -507,30 +516,171 @@ Shared: Alle Agenten, alle Rechner, alle Sessions
 - Long-term Memory: User-uebergreifend, persistiert ueber alle Sessions (Name, Praeferenzen, Tech-Stack)
 - Short-term Memory: Session-spezifisch, trackt aktuelle Arbeit
 - Ueberlebt Komprimierung — wird bei jedem Turn frisch injiziert
+- Priority-Score 1-10 pro Erinnerung (hoehere werden bevorzugt geladen)
+- Context-Budget: max 3.000 Tokens pro Turn (Top-K nach Score)
 - 5 Agent-Tools: memory_search, memory_store, memory_list, memory_get, memory_forget
+- **SHARED** — alle Agenten speichern + lesen, **CLOUD** (Qdrant + Redis)
 
 #### Schicht 3: HippoRAG 2
 - Wissensgraph + Vektordatenbank
-- Neo4j + Qdrant + PersonalizedPageRank
+- Neo4j Cloud (Graph) + Qdrant Cloud (Vektoren) + PersonalizedPageRank
 - Speichert Wissen + Beziehungen
 - Vergisst nie — Menschenaehnliches Gedaechtnis
+- **SHARED** — alle 30-40 Agenten lesen + schreiben, **CLOUD**
+- Service: `hipporag-service` (Entity-Extraktion → Graph-Build → PPR → Retrieval)
 
 #### Schicht 4: Agentic RAG
 - Intelligente Suchsteuerung + Bewertung
-- Steuert Suche: WANN, WO, WIE
-- Bewertet Ergebnisse, korrigiert sich selbst
+- Steuert Suche: WANN, WO, WIE VIEL aus welcher Schicht
+- Router entscheidet: S1? S2? S3? S6? Kombination?
+- Evaluator bewertet: Ergebnis gut genug? Sonst Retry mit anderer Quelle
+- Feedback-Loop: Falsche Ergebnisse → markiert als veraltet → Score sinkt
+- **AGENT-ONLY** — jeder Agent steuert seine eigene Suche, **LOKAL**
+- Service: `agentic-rag` (Router + Evaluator + Retry-Logik + Orchestrator)
 
 #### Schicht 5: Agentic Learning Graphs
-- Selbst-erweiternd, Agent baut eigenes Wissensnetz
+- Selbst-erweiternd, Agenten bauen gemeinsames Wissensnetz
 - Waechst mit jeder Interaktion
+- Pattern-Detection erkennt wiederkehrende Muster
+- **SHARED** — Agenten bauen gemeinsam, **CLOUD** (Neo4j, gleiche Instanz wie S3)
+- Service: `learning-graphs` (Pattern-Detector + Graph-Updater + Consolidator)
 
-#### Schicht 6: Recall Memory (NEU)
+#### Schicht 6: Recall Memory
 - Komplette rohe Konversationshistorie wird gespeichert
 - Jede Nachricht, jeder Tool-Call, jede Antwort, Zeitstempel
 - Automatisch durch SessionEnd-Hook
 - Agent-Tools: conversation_search, conversation_search_date
 - Wie rohe Logdateien — nichts geht verloren
-- Gespeichert in: PostgreSQL oder SQLite
+- **SHARED** — alle speichern, alle koennen suchen, **CLOUD** (PostgreSQL)
+- Lokal-Fallback: SQLite + WAL-Modus fuer Entwicklung/Offline
+
+### Shared/Cloud vs. Agent-Only/Lokal Architektur
+
+Bei 30-40 parallelen Agenten gilt: Shared-Daten muessen in Cloud-DBs,
+Agent-Only-Daten bleiben lokal. Kein lokales File wird von mehreren
+Agenten gleichzeitig angefasst → Null Locking-Probleme.
+
+```
+CLOUD (Shared — alle 30-40 Agenten):
+├── Redis          → Core Memory Shared ([USER], [PROJEKT], [ENTSCHEIDUNGEN])
+│                    + Task-Queue + Fragenkatalog + Event-Bus + Warm-Up Cache
+├── Qdrant         → Auto-Recall Vektoren (S2) + HippoRAG Embeddings (S3)
+├── Neo4j          → Wissensgraph (S3) + Learning Graphs (S5)
+└── PostgreSQL     → Recall Memory (S6), Connection Pooling (Pool-Size 40)
+
+LOKAL (Agent-Only — isoliert pro Agent):
+├── agent-XXX-core.json → [AKTUELLE-ARBEIT], [FEHLER-LOG]
+├── Agentic RAG Logik   → Router + Evaluator (S4, laeuft im Prozess)
+├── Daily Notes          → Markdown auf Disk
+└── Session State        → Lebt nur waehrend Session
+```
+
+### 3 Gehirn-Mechanismen
+
+#### Konsolidierung (wie Schlaf)
+Cronjob taeglich/woechentlich:
+S6 (Recall Memory, PostgreSQL) → LLM-Analyse → Fakten extrahieren → S3 (Neo4j)
+"Was wurde diese Woche gelernt?" — Rohdaten werden zu strukturiertem Wissen.
+Graph-Snapshot VOR jeder Konsolidierung (max 7, Rollback moeglich).
+
+#### Decay/Pruning (aktives Vergessen)
+Erinnerungen die >90 Tage nicht abgerufen wurden:
+→ Relevanz-Score sinkt automatisch
+→ Unter Schwellenwert → Archiv oder Loeschung
+Verhindert dass Wissensgraph und Vektordatenbank "zumuellen".
+
+#### Priority-Scoring (emotionale Gewichtung)
+Jede Erinnerung bekommt Score 1-10:
+- Blocker-Frage beantwortet → 9, Bug gefixt → 8, Architektur-Entscheidung → 9
+- Routine-Commit → 2, Standard-Log → 1
+Hoehere Scores werden bei Auto-Recall (S2) bevorzugt geladen.
+
+### 3 fehlende Services
+
+#### hipporag-service (Schicht 3)
+```
+hipporag-service/
+├── entity_extractor.py    ← LLM extrahiert Entitaeten aus Text
+├── graph_builder.py       ← Entitaeten + Beziehungen → Neo4j
+├── ppr.py                 ← PersonalizedPageRank Algorithmus
+├── retriever.py           ← Query → PPR → Top-K relevante Knoten
+└── server.py              ← MCP/REST Endpoint
+```
+
+#### agentic-rag (Schicht 4)
+```
+agentic-rag/
+├── router.py              ← Entscheidet: S1? S2? S3? S6? Alle?
+├── evaluator.py           ← Bewertet: Ist das Ergebnis gut genug?
+├── retry_logic.py         ← Schlecht? → Andere Quelle, andere Query
+├── feedback.py            ← Falsches Wissen → markiert als veraltet
+└── orchestrator.py        ← Multi-Step: Suche → Bewerte → Verfeinere
+```
+
+#### learning-graphs (Schicht 5)
+```
+learning-graphs/
+├── pattern_detector.py    ← Erkennt wiederkehrende Muster
+├── graph_updater.py       ← SessionEnd-Hook → neue Knoten/Kanten
+└── consolidator.py        ← Woechentlich: Verdichte + Prune
+```
+
+### Betriebsmechanismen (30-40 Agenten)
+
+#### Context-Budget-Manager
+Maximale Token-Budgets pro Schicht pro Turn:
+- S1 Core Memory Shared: max 3.000 Tokens (fest, aus Redis)
+- S1 Core Memory Agent: max 2.000 Tokens (fest, lokal)
+- S2 Auto-Recall: max 3.000 Tokens (dynamisch, Top-K nach Priority-Score)
+- S3 HippoRAG Ergebnis: max 2.000 Tokens (on-demand)
+- Gesamt-Budget: ~10.000 Tokens — Rest fuer User-Prompt + Agent-Antwort
+
+#### Cross-Agent Event-Bus (Redis Pub/Sub)
+Agenten kommunizieren ueber Redis Pub/Sub:
+- Agent A published: "BUG in auth.py Zeile 42"
+- Alle Agenten die auth.py betreffen: bekommen Notification
+- Shared Scratchpad fuer kollaborative Problemloesung
+- Kanäle: `bugs`, `decisions`, `progress`, `blocker`
+
+#### Conflict Resolution
+Hierarchie bei widersprüchlichen Shared-Writes:
+- Berater > Architekt > Coder > Tester > Dokumentierer
+- Bei gleicher Ebene: juengerer Eintrag gewinnt
+- Unloesbare Konflikte → automatische Blocker-Frage an Admin/Supervisor
+
+#### Warm-Up Bundle (Schnellstart)
+Redis cached ein "Briefing-Paket" pro Projekt:
+- Core Memory Shared (immer gleich fuer alle)
+- Top-20 relevanteste Erinnerungen (S2, nach Priority-Score)
+- Aktuelle Task-Queue Uebersicht
+→ 1 Redis-GET statt 5 DB-Abfragen. Agent ist in <100ms einsatzbereit.
+
+#### Degraded Mode (Graceful Degradation)
+Ausfallverhalten pro Cloud-DB:
+- Neo4j down → S3/S5 deaktiviert, S1/S2/S4/S6 laufen weiter
+- Qdrant down → S2 nur Redis-Cache, kein Vektor-Search
+- Redis down → Fallback auf direkte DB-Queries (langsamer, kein Event-Bus)
+- PostgreSQL down → SQLite WAL Fallback (lokal, nur eigene Session)
+Agent bekommt Warnung: "Eingeschraenkter Modus — [DB] nicht erreichbar"
+
+#### Versioning / Graph-Rollback
+Graph-Snapshot vor jeder Konsolidierung:
+- `neo4j-admin dump` → datierter Snapshot
+- Max 7 Snapshots (1 pro Woche, aeltere werden rotiert)
+- Bei vergiftetem Graph → Rollback auf letzten guten Snapshot
+
+### Performance-Referenzwerte (gemessen)
+
+| Metrik | Wert | Quelle |
+|--------|------|--------|
+| SQLite lokal Query | 0.04 ms | Benchmark |
+| SQLite FTS lokal | 0.021 ms | Benchmark |
+| Neo4j Cloud Latenz | 24 ms | Gemessen |
+| Supabase Latenz | 4 ms | Gemessen |
+| Parallel-Access 15 Agenten (SQLite) | 525 ms | Benchmark — deshalb Cloud |
+| Qdrant Cloud (geschaetzt) | ~20 ms | Break-Even bei 2k Chunks |
+| Warm-Up Bundle (Redis GET) | <5 ms | Geschaetzt |
+| Connection Pool PostgreSQL | Pool-Size 40, max 60 | Fuer 30-40 Agenten |
 
 ### Agent-Tools fuer das Gehirn-System
 

@@ -339,6 +339,7 @@ Die MCP-Server laufen via Docker auf dem Cloud-Server. Lokal verbindest du dich 
 # 1. SSH-Tunnel oeffnen (alle relevanten Ports)
 ssh -L 8100:localhost:8100 \
     -L 8101:localhost:8101 \
+    -L 8102:localhost:8102 \
     -L 7687:localhost:7687 \
     -L 6333:localhost:6333 \
     -L 6379:localhost:6379 \
@@ -358,10 +359,11 @@ claude mcp add notion -- npx @modelcontextprotocol/server-notion
 > |------|---------|-------|
 > | 8100 | RAG-API | MCP-Server fuer Wissensbasis |
 > | 8101 | Doc-Scanner | MCP-Server fuer Dokumentenanalyse |
-> | 7687 | Neo4j (Bolt) | Graph-Datenbank |
-> | 6333 | Qdrant | Vektor-Datenbank |
-> | 6379 | Redis | Cache + Queue |
-> | 5432 | PostgreSQL | Recall Memory |
+> | 8102 | HippoRAG | PersonalizedPageRank Service (S3) |
+> | 7687 | Neo4j (Bolt) | Graph-Datenbank (Shared: S3, S5) |
+> | 6333 | Qdrant | Vektor-Datenbank (Shared: S2, S3) |
+> | 6379 | Redis | Cache + Event-Bus + Warm-Up (Shared) |
+> | 5432 | PostgreSQL | Recall Memory (Shared: S6, Pool 40) |
 
 ### B4: Testen
 

@@ -65,7 +65,8 @@ Ein autonomes Multi-Agent-System bestehend aus 10 spezialisierten KI-Agenten die
 |-----------|:------:|----------|
 | Agenten | 10 | Spezialisierte Arbeiter |
 | Hooks | 17 | Automatische Qualitaets- und Sicherheits-Kontrolle |
-| Datenbanken | 4 | Neo4j (Graph), Qdrant (Vektor), Redis (Cache), PostgreSQL/SQLite (Recall Memory) |
+| Datenbanken | 4 Cloud + Lokal | Neo4j (Graph, Shared), Qdrant (Vektor, Shared), Redis (Cache+Event-Bus, Shared), PostgreSQL (Recall, Shared) + lokale JSON (Agent-Only) |
+| Services | 3 | hipporag-service (S3), agentic-rag (S4), learning-graphs (S5) |
 | MCP-Server | 4+ | RAG-API, Doc-Scanner, GitHub, Notion |
 | Kommunikation | 4 | Terminal, Slack, WhatsApp, Linear |
 
@@ -667,20 +668,25 @@ Agent beendet Antwort
 | `similarity_threshold` | 0.7 | Min. Aehnlichkeit fuer Ergebnisse |
 | `max_results` | 10 | Max. Ergebnisse pro Abfrage |
 
-### 4.3 Agentic RAG (Schicht 4)
+### 4.3 Agentic RAG (Schicht 4) — AGENT-ONLY, LOKAL
 
-Steuert die Suchstrategie intelligent:
-- Entscheidet ob Suche noetig ist
-- Waehlt Suchstrategie (Graph, Vektor, Hybrid)
-- Bewertet Ergebnis-Qualitaet
-- Korrigiert bei schlechten Ergebnissen
+Steuert die Suchstrategie intelligent (Service: `agentic-rag`):
+- **Router:** Entscheidet welche Schicht(en) abgefragt werden (S1/S2/S3/S6)
+- **Evaluator:** Bewertet Ergebnis-Qualitaet — gut genug oder Retry?
+- **Retry-Logik:** Bei schlechten Ergebnissen → andere Quelle, verfeinerte Query (max 3 Runden)
+- **Feedback-Loop:** Agent markiert falsches Wissen → Score sinkt → Decay beschleunigt
+- Laeuft lokal im Agenten-Prozess (kein Cloud-Service noetig)
+- Context-Budget: Max 10.000 Tokens aus allen Schichten zusammen
 
-### 4.4 Agentic Learning Graphs (Schicht 5)
+### 4.4 Agentic Learning Graphs (Schicht 5) — SHARED, CLOUD
 
-Erweitert das Wissensnetz automatisch:
-- Jede Interaktion kann neue Knoten/Kanten erzeugen
-- Graph waechst mit jeder Session
-- Naechste Abfrage profitiert von vorherigem Wissen
+Erweitert das Wissensnetz automatisch (Service: `learning-graphs`):
+- **Pattern-Detection:** Erkennt wiederkehrende Muster (Tool-Kombinationen, Fehler)
+- **Graph-Updater:** SessionEnd-Hook → neue Knoten/Kanten in Neo4j
+- **Konsolidierung:** Woechentlicher Cronjob: S6 Rohdaten → Fakten → Neo4j
+- **Decay/Pruning:** Taeglich: Score sinkt nach 90 Tagen ohne Abruf → Archiv/Loeschung
+- **Priority-Scoring:** Jede Erinnerung Score 1-10 (Blocker=9, Routine=2)
+- Graph-Snapshot vor jeder Konsolidierung (max 7, Rollback moeglich)
 
 ---
 

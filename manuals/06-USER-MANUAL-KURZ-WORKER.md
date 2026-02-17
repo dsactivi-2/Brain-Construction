@@ -84,10 +84,10 @@ Jederzeit `/fortschritt` eingeben. Du siehst:
 |----------------|----------------------------------|
 | `/briefing`    | Neuen Auftrag starten            |
 | `/fortschritt` | Wie weit ist das Team?           |
-| `/katalog`     | Offene Fragen anzeigen           |
+| `/katalog`     | Alle Fragen anzeigen             |
 | `/weiter`      | Nach Blocker-Antwort weitermachen|
 | `/status`      | System-Status anzeigen           |
-| `/fragen`      | Alle Fragen auflisten            |
+| `/fragen`      | Offene Fragen anzeigen           |
 
 **Das ist alles.** Andere Commands gibt es fuer dich nicht.
 
