@@ -111,15 +111,19 @@ Jeder Punkt muss abgehakt werden bevor das Projekt als fertig gilt.
 - [x] Phase 3 gepusht — 2026-02-17 22:56
 
 ## Phase 4: Installations-Guide
-- [ ] Terminal-Version (Schritt fuer Schritt)
-  - [ ] Windows
-  - [ ] Mac
-- [ ] Cloud-Version (Schritt fuer Schritt)
-  - [ ] Server aufsetzen
-  - [ ] Docker deployen
-  - [ ] Services verbinden
-  - [ ] Testen
-- [ ] Phase 4 gepusht + geprueft
+- [x] Terminal-Version (Schritt fuer Schritt) — 2026-02-17 22:59
+  - [x] Windows (10 Schritte) — 2026-02-17 22:59
+  - [x] Mac (10 Schritte) — 2026-02-17 22:59
+- [x] Cloud-Version (Schritt fuer Schritt) — 2026-02-17 23:00
+  - [x] Server aufsetzen (Hetzner Empfehlung) — 2026-02-17 23:00
+  - [x] Docker deployen — 2026-02-17 23:00
+  - [x] Services verbinden (SSH Tunnel) — 2026-02-17 23:00
+  - [x] Testen (Health-Check) — 2026-02-17 23:00
+  - [x] Monitoring (Uptime Kuma) — 2026-02-17 23:00
+  - [x] SSL + Firewall — 2026-02-17 23:00
+  - [x] Fehlerbehebung — 2026-02-17 23:01
+  - [x] Schnellstart-Zusammenfassung — 2026-02-17 23:01
+- [x] Phase 4 gepusht — 2026-02-17 23:01
 
 ## Phase 5: User-Manual Detail
 - [ ] Inhaltsverzeichnis mit Seitennummern
