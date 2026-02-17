@@ -742,7 +742,7 @@ EOF
 # Erstellen
 
 # Lokal verbinden:
-cd ~/Desktop/claude-agent-team
+cd ~/claude-agent-team
 git remote add origin https://github.com/DEIN-USER/claude-agent-team.git
 git push -u origin master
 ```
