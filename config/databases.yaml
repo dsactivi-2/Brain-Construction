@@ -1,0 +1,47 @@
+# Datenbank-Konfiguration — Cloud Code Team 02.26
+# Alle 4 Cloud-DBs von Tag 1 (30-40 parallele Agenten)
+
+neo4j:
+  uri: bolt://localhost:7687          # oder neo4j+s://xxx.neo4j.io
+  user: neo4j
+  password: DEIN_NEO4J_PASSWORT       # In .env oder Vault speichern!
+
+qdrant:
+  url: http://localhost:6333           # oder https://xxx.cloud.qdrant.io
+  api_key: null                        # nur bei Managed noetig
+  collection: hipporag_embeddings
+  vector_size: 384
+
+redis:
+  url: redis://:DEIN_REDIS_PASSWORT@localhost:6379/0
+  # Redis wird auch genutzt fuer:
+  # - Core Memory Shared ([USER], [PROJEKT], [ENTSCHEIDUNGEN])
+  # - Event-Bus (Pub/Sub: bugs, decisions, progress, blocker)
+  # - Warm-Up Bundle (Schnellstart fuer neue Agenten)
+  # - Task-Queue + Fragenkatalog
+
+recall_memory:
+  type: postgresql                     # oder sqlite (nur Entwicklung/Offline)
+  host: localhost
+  port: 5432
+  database: recall_memory
+  user: recall_user
+  password: SICHERES_PASSWORT          # In .env oder Vault speichern!
+  pool_size: 40                        # fuer 30-40 parallele Agenten
+  max_overflow: 20                     # Spitzen abfangen
+
+embedding:
+  model: all-MiniLM-L6-v2             # lokal, gratis, schnell
+  # alternativ: text-embedding-3-small # OpenAI, besser aber kostet
+
+# --- Neue Services ---
+hipporag:
+  url: http://localhost:8102           # PersonalizedPageRank Service
+  # Nutzt: Neo4j (Graph-Traversal) + Qdrant (Vektor-Suche)
+
+learning_graphs:
+  neo4j_uri: bolt://localhost:7687     # Gleiche Neo4j-Instanz wie HippoRAG
+  consolidation_schedule: "0 3 * * 0"  # Woechentlich Sonntag 03:00
+  decay_schedule: "0 4 * * *"          # Taeglich 04:00
+  decay_threshold_days: 90             # Score sinkt nach 90 Tagen ohne Abruf
+  archive_threshold_days: 180          # Archiv-Eintraege nach 180 Tagen loeschen

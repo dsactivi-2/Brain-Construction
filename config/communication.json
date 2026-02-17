@@ -1,0 +1,20 @@
+{
+  "slack": {
+    "webhook_url": "https://hooks.slack.com/services/XXX/XXX/XXX",
+    "channel": "#claude-agent-team",
+    "notify_on": ["blocker", "fertig", "fehler", "meilenstein"]
+  },
+  "whatsapp": {
+    "enabled": false,
+    "token": "DEIN_META_TOKEN",
+    "phone_id": "DEINE_PHONE_ID",
+    "notify_on": ["blocker", "fertig"]
+  },
+  "linear": {
+    "enabled": false,
+    "api_key": "lin_api_DEIN_KEY",
+    "team_id": "TEAM_ID",
+    "notify_on": ["neue_aufgabe", "fertig"]
+  },
+  "default_channel": "slack"
+}

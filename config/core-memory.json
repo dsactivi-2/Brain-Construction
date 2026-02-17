@@ -1,0 +1,36 @@
+{
+  "version": 1,
+  "max_total_chars": 20000,
+  "blocks": {
+    "USER": {
+      "max_chars": 4000,
+      "content": "",
+      "storage": "redis",
+      "description": "SHARED — Wer ist der Nutzer? Name, Rolle, Vorlieben, Kommunikationsstil"
+    },
+    "PROJEKT": {
+      "max_chars": 4000,
+      "content": "",
+      "storage": "redis",
+      "description": "SHARED — Aktuelles Projekt: Name, Stack, Architektur, wichtige Entscheidungen"
+    },
+    "ENTSCHEIDUNGEN": {
+      "max_chars": 4000,
+      "content": "",
+      "storage": "redis",
+      "description": "SHARED — Getroffene Architektur- und Design-Entscheidungen mit Begruendung"
+    },
+    "FEHLER-LOG": {
+      "max_chars": 4000,
+      "content": "",
+      "storage": "local",
+      "description": "AGENT-ONLY — Bekannte Fehler, Workarounds — pro Agent isoliert"
+    },
+    "AKTUELLE-ARBEIT": {
+      "max_chars": 4000,
+      "content": "",
+      "storage": "local",
+      "description": "AGENT-ONLY — Was gerade passiert, offene Tasks — pro Agent isoliert"
+    }
+  }
+}

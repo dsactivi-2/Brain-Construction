@@ -1,0 +1,45 @@
+{
+  "hooks": {
+    "SessionStart": [
+      {"type": "command", "command": "bash ~/claude-agent-team/hooks/session-start-startup.sh", "timeout": 15000},
+      {"type": "command", "command": "bash ~/claude-agent-team/hooks/core-memory-inject.sh", "timeout": 10000}
+    ],
+    "UserPromptSubmit": [
+      {"type": "command", "command": "bash ~/claude-agent-team/hooks/user-prompt-submit.sh", "timeout": 5000},
+      {"type": "command", "command": "bash ~/claude-agent-team/hooks/auto-recall.sh", "timeout": 8000}
+    ],
+    "PreToolUse": [
+      {"matcher": "Write|Edit", "type": "agent", "prompt": "Pruefe ob diese Code-Aenderung sicher ist. Keine Secrets, keine Injection, keine gefaehrlichen Patterns.", "timeout": 30000},
+      {"matcher": "Bash", "type": "agent", "prompt": "Pruefe ob dieser Bash-Befehl sicher ist. Blockiere: rm -rf /, DROP TABLE, --force auf main/master, Secrets in Befehlen.", "timeout": 30000}
+    ],
+    "PostToolUse": [
+      {"matcher": "Write|Edit", "type": "command", "command": "bash ~/claude-agent-team/hooks/post-tool-write.sh", "timeout": 30000},
+      {"matcher": "Bash", "type": "command", "command": "bash ~/claude-agent-team/hooks/post-tool-bash.sh", "timeout": 10000}
+    ],
+    "PostToolUseFailure": [
+      {"type": "command", "command": "bash ~/claude-agent-team/hooks/post-tool-failure.sh", "timeout": 10000}
+    ],
+    "PreCompact": [
+      {"type": "command", "command": "bash ~/claude-agent-team/hooks/pre-compact.sh", "timeout": 15000}
+    ],
+    "Stop": [
+      {"type": "agent", "prompt": "Pruefe ob alle zugewiesenen Tasks erledigt sind. Kein Task darf uebersprungen oder als erledigt markiert sein ohne tatsaechlich erledigt zu sein.", "timeout": 60000},
+      {"type": "command", "command": "bash ~/claude-agent-team/hooks/auto-capture.sh", "timeout": 10000}
+    ],
+    "SubagentStart": [
+      {"type": "command", "command": "bash ~/claude-agent-team/hooks/subagent-start.sh", "timeout": 10000}
+    ],
+    "SubagentStop": [
+      {"type": "agent", "prompt": "Pruefe die Qualitaet der Subagent-Ausgabe. Ist die Aufgabe vollstaendig und korrekt erledigt?", "timeout": 60000}
+    ],
+    "Notification": [
+      {"type": "command", "command": "bash ~/claude-agent-team/hooks/notification.sh", "timeout": 10000}
+    ],
+    "TaskCompleted": [
+      {"type": "agent", "prompt": "Verifiziere dass dieser Task WIRKLICH erledigt ist. Pruefe: Code geschrieben? Tests bestanden? Review OK? Nichts uebersprungen?", "timeout": 60000}
+    ],
+    "SessionEnd": [
+      {"type": "command", "command": "bash ~/claude-agent-team/hooks/session-end-recall.sh", "timeout": 20000}
+    ]
+  }
+}

@@ -1,0 +1,32 @@
+{
+  "mem0": {
+    "provider": "self-hosted",
+    "vector_store": {
+      "provider": "qdrant",
+      "url": "http://localhost:6333",
+      "collection": "mem0_memories"
+    },
+    "embedder": {
+      "provider": "ollama",
+      "url": "http://localhost:11434",
+      "model": "nomic-embed-text"
+    }
+  },
+  "auto_recall": true,
+  "auto_capture": true,
+  "scopes": {
+    "long_term": "user",
+    "short_term": "session"
+  },
+  "priority": {
+    "auto_assign": true,
+    "defaults": {
+      "entscheidung": 9,
+      "fehler": 8,
+      "fakt": 7,
+      "praeferenz": 6,
+      "todo": 5,
+      "beobachtung": 3
+    }
+  }
+}
