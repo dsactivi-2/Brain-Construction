@@ -1,0 +1,890 @@
+# USER-MANUAL DETAIL — Admin-Version
+
+## Cloud Code Team 02.26
+
+**Version:** 1.0.0
+**Rolle:** Administrator (Vollzugriff)
+**Stand:** 2026-02-17
+
+---
+
+## INHALTSVERZEICHNIS
+
+| Kapitel | Titel | Seite |
+|---------|-------|:-----:|
+| 1 | Systemuebersicht | 3 |
+| 2 | Agenten | 5 |
+| 2.1 | Berater (Orchestrator) | 5 |
+| 2.2 | Architekt | 8 |
+| 2.3 | Coder | 10 |
+| 2.4 | Tester + Debugger | 12 |
+| 2.5 | Reviewer | 14 |
+| 2.6 | Designer | 16 |
+| 2.7 | Analyst | 18 |
+| 2.8 | Doc-Scanner | 20 |
+| 2.9 | DevOps | 22 |
+| 2.10 | Dokumentierer | 24 |
+| 3 | Hooks | 26 |
+| 4 | Gehirn-System | 30 |
+| 4.1 | HippoRAG 2 | 30 |
+| 4.2 | Agentic RAG | 32 |
+| 4.3 | Agentic Learning Graphs | 33 |
+| 5 | Profil-System | 34 |
+| 6 | Fragenkatalog | 36 |
+| 7 | Multi-Model Routing | 38 |
+| 8 | Kommunikation | 39 |
+| 9 | Connectoren + MCP | 41 |
+| 10 | Web-Scanner | 43 |
+| 11 | Datenbanken | 45 |
+| 12 | Funktions-Registry | 48 |
+| 13 | Endpoint-Registry | 52 |
+| 14 | Einstellungen | 55 |
+| 15 | Administration | 60 |
+| 16 | Fehlerbehebung | 65 |
+| A | Anhang: Alle Commands | 68 |
+| B | Anhang: Alle Rules | 70 |
+| C | Anhang: Alle Hook-Konfigurationen | 73 |
+
+---
+
+## Seite 3 — Kapitel 1: Systemuebersicht
+
+### 1.1 Was ist das Cloud Code Team?
+
+Ein autonomes Multi-Agent-System bestehend aus 10 spezialisierten KI-Agenten die koordiniert zusammenarbeiten. Das System wird von einem Berater-Agenten orchestriert und nutzt ein dreischichtiges Gehirn-System fuer persistentes Gedaechtnis.
+
+### 1.2 Komponenten
+
+| Komponente | Anzahl | Funktion |
+|-----------|:------:|----------|
+| Agenten | 10 | Spezialisierte Arbeiter |
+| Hooks | 17 | Automatische Qualitaets- und Sicherheits-Kontrolle |
+| Datenbanken | 3 | Neo4j (Graph), Qdrant (Vektor), Redis (Cache) |
+| MCP-Server | 4+ | RAG-API, Doc-Scanner, GitHub, Notion |
+| Kommunikation | 4 | Terminal, Slack, WhatsApp, Linear |
+
+### 1.3 Architektur-Diagramm
+
+```
+Nutzer → [Slack/WhatsApp/Linear/Terminal]
+           │
+           ▼
+         BERATER ──► Task-Queue
+           │
+    ┌──────┼──────────────────────┐
+    ▼      ▼      ▼      ▼       ▼
+ ARCHITEKT CODER DESIGNER ANALYST DEVOPS
+    │      │      │       │       │
+    └──────┴──────┴───────┴───────┘
+           │
+    ┌──────┼──────┐
+    ▼      ▼      ▼
+ TESTER REVIEWER DOC-SCANNER
+           │
+           ▼
+    HOOKS (17x automatisch)
+           │
+           ▼
+    GEHIRN (HippoRAG 2 + Agentic RAG + Learning Graphs)
+```
+
+---
+
+## Seite 5 — Kapitel 2: Agenten
+
+### 2.1 Berater (Orchestrator)
+
+**ID:** AGT-001
+**Modell-Default:** Opus
+**Rolle:** Einziger Kontakt zum Nutzer, koordiniert alle Agenten
+
+#### Funktionen
+
+| FN-ID | Funktion | Beschreibung | Parameter | Rueckgabe |
+|-------|----------|-------------|-----------|-----------|
+| FN-001 | Briefing starten | Strukturiertes Briefing mit Rueckfragen an den Nutzer | Nutzer-Eingabe (Text) | Frageliste + Zusammenfassung |
+| FN-002 | Komplexitaet bewerten | Bewertet Task-Komplexitaet 1-3, weist Modell zu | Task-Beschreibung | Stufe (1-3) + Modell (Haiku/Sonnet/Opus) |
+| FN-003 | Task-Queue erstellen | Erstellt priorisierte Aufgabenliste | Briefing-Ergebnis | Sortierte Task-Liste mit Abhaengigkeiten |
+| FN-004 | Agent zuweisen | Weist Task an spezifischen Agent mit Modell-Stufe | Task + Agent-Name + Stufe | Bestaetigung + Agent-Status |
+| FN-005 | Fortschritt melden | Sendet Status-Update an Nutzer | Meilenstein-Info | Notification (Slack/WhatsApp) |
+| FN-006 | Fragenkatalog verwalten | Schreibt/liest Fragen im Katalog | Frage + Optionen + Prio | Katalog-Eintrag |
+| FN-007 | Fallback ausfuehren | Weist Task an anderen Agent wenn einer versagt | Fehlgeschlagener Task + Grund | Neuer Agent-Zuweisung |
+| FN-008 | Alle stoppen | Stoppt alle Agenten sofort | — | Bestaetigung |
+
+#### Commands
+
+| Command | FN-ID | Syntax | Beispiel |
+|---------|-------|--------|---------|
+| `/briefing` | FN-001 | `/briefing` | `/briefing` |
+| `/plan` | FN-003 | `/plan` | `/plan` |
+| `/delegate` | FN-004 | `/delegate AGENT TASK` | `/delegate coder "Login-Seite bauen"` |
+| `/katalog` | FN-006 | `/katalog [filter]` | `/katalog blocker` |
+| `/fortschritt` | FN-005 | `/fortschritt` | `/fortschritt` |
+| `/stop-alle` | FN-008 | `/stop-alle` | `/stop-alle` |
+| `/weiter` | — | `/weiter` | `/weiter` |
+
+#### Rules
+
+| Rule-ID | Rule | Prioritaet |
+|---------|------|:----------:|
+| R-01-01 | Einziger Kontakt zum Nutzer | Kritisch |
+| R-01-02 | Rueckfragen bei Unklarheiten — nie raten | Kritisch |
+| R-01-03 | Komplexitaet bewerten + Modell zuweisen | Hoch |
+| R-01-04 | Task-Queue mit Prioritaet erstellen | Hoch |
+| R-01-05 | Proaktiv zuweisen — nie warten | Kritisch |
+| R-01-06 | Kein Agent ohne Freigabe | Kritisch |
+| R-01-07 | Blocker sofort an Nutzer | Kritisch |
+| R-01-08 | Nicht-Blocker in Katalog | Hoch |
+| R-01-09 | Fortschritt bei Meilensteinen melden | Mittel |
+| R-01-10 | Alle Fragen vor Start stellen | Hoch |
+| R-01-11 | Fallback bei Agent-Versagen | Hoch |
+
+#### Einstellungen
+
+| Einstellung | Default | Optionen | Beschreibung |
+|------------|---------|----------|-------------|
+| `model` | opus | haiku, sonnet, opus | Standard-Modell |
+| `auto_delegate` | true | true, false | Automatisch zuweisen oder manuell |
+| `notification_channel` | slack | slack, whatsapp, linear, all | Bevorzugter Benachrichtigungskanal |
+| `max_parallel_agents` | 4 | 1-10 | Maximale parallele Agenten |
+| `question_threshold` | 3 | 1-10 | Ab wie vielen offenen Fragen Notification |
+
+---
+
+### 2.2 Architekt
+
+**ID:** AGT-002
+**Modell-Default:** Opus
+**Rolle:** System-Design, Struktur, Veto-Recht
+
+#### Funktionen
+
+| FN-ID | Funktion | Beschreibung | Parameter | Rueckgabe |
+|-------|----------|-------------|-----------|-----------|
+| FN-009 | Design erstellen | System-Design fuer neues Feature | Anforderungen | Design-Dokument + Diagramm |
+| FN-010 | Veto ausueben | Design blockieren mit Begruendung | Design-Vorschlag | Veto + Begruendung + Alternative |
+| FN-011 | Abhaengigkeiten mappen | Abhaengigkeits-Graph erstellen | Feature/Modul | Graph (Nodes + Edges) |
+| FN-012 | ADR schreiben | Architecture Decision Record | Entscheidung + Kontext | ADR-Dokument in DB |
+
+#### Commands
+
+| Command | FN-ID | Syntax |
+|---------|-------|--------|
+| `/design` | FN-009 | `/design BESCHREIBUNG` |
+| `/veto` | FN-010 | `/veto BEGRUENDUNG` |
+| `/deps` | FN-011 | `/deps MODUL` |
+| `/adr` | FN-012 | `/adr TITEL` |
+
+---
+
+### 2.3 Coder
+
+**ID:** AGT-003
+**Modell-Default:** Sonnet (Standard), Opus (komplex)
+
+#### Funktionen
+
+| FN-ID | Funktion | Beschreibung | Parameter | Rueckgabe |
+|-------|----------|-------------|-----------|-----------|
+| FN-013 | Implementieren | Code schreiben nach Anweisung | Task + Architektur-Vorgabe | Code + FN-IDs registriert |
+| FN-014 | Refactoren | Code ueberarbeiten nach Feedback | Review-Feedback | Refactored Code |
+| FN-015 | Code pruefen | Anweisung gegen bestehenden Code pruefen | Anweisung + Codebase | Fit/Nicht-Fit + Begruendung |
+| FN-016 | Funktion registrieren | Neue Funktion in Registry eintragen | Funktionsname + Details | FN-ID |
+| FN-017 | Endpoint registrieren | Neuen Endpoint in Registry eintragen | Endpoint + Details | EP-ID |
+
+#### Commands
+
+| Command | FN-ID | Syntax |
+|---------|-------|--------|
+| `/implement` | FN-013 | `/implement TASK` |
+| `/refactor` | FN-014 | `/refactor FEEDBACK` |
+| `/check` | FN-015 | `/check ANWEISUNG` |
+| `/register` | FN-016/017 | `/register fn FUNKTIONSNAME` oder `/register ep ENDPOINT` |
+| `/templates` | — | `/templates [SPRACHE]` |
+
+---
+
+### 2.4 Tester + Debugger
+
+**ID:** AGT-004
+**Modell-Default:** Sonnet (Tests), Opus (komplexe Bugs)
+
+#### Funktionen
+
+| FN-ID | Funktion | Beschreibung | Parameter | Rueckgabe |
+|-------|----------|-------------|-----------|-----------|
+| FN-018 | Tests schreiben | Unit/Integration Tests erstellen | Code + Anforderungen | Test-Dateien |
+| FN-019 | Tests ausfuehren | Alle Tests laufen lassen | Test-Pfad | Ergebnis (Pass/Fail + Details) |
+| FN-020 | Debuggen | Root-Cause Analyse bei Fehler | Fehlerbeschreibung + Code | Root-Cause + Fix-Vorschlag |
+| FN-021 | Coverage messen | Test-Abdeckung berechnen | Projekt-Pfad | Coverage-Report (%) |
+| FN-022 | Regression testen | Regressions-Tests nach Fix | Fix-Beschreibung | Regressions-Report |
+
+#### Commands
+
+| Command | FN-ID | Syntax |
+|---------|-------|--------|
+| `/test` | FN-019 | `/test [PFAD]` |
+| `/debug` | FN-020 | `/debug FEHLERBESCHREIBUNG` |
+| `/coverage` | FN-021 | `/coverage` |
+| `/regression` | FN-022 | `/regression` |
+
+---
+
+### 2.5 Reviewer
+
+**ID:** AGT-005
+**Modell-Default:** Sonnet (Standard), Opus (Architektur-Review)
+
+#### Funktionen
+
+| FN-ID | Funktion | Beschreibung | Parameter | Rueckgabe |
+|-------|----------|-------------|-----------|-----------|
+| FN-023 | Code reviewen | Code-Qualitaet pruefen | Code-Diff | Review-Ergebnis + Kommentare |
+| FN-024 | Auto-Fix | Kleine Fehler selbst korrigieren | Review-Befund | Korrigierter Code |
+| FN-025 | Commit + Push | Code committen und pushen | Dateien + Message | Commit-Hash + Push-Status |
+| FN-026 | Changelog erstellen | Aenderungs-Eintrag generieren | Commit-Info | Changelog-Eintrag |
+| FN-027 | Repo konfigurieren | Repo-URL beim ersten Mal setzen | Repo-URL | Bestaetigung |
+
+#### Commands
+
+| Command | FN-ID | Syntax |
+|---------|-------|--------|
+| `/review` | FN-023 | `/review` |
+| `/commit` | FN-025 | `/commit [MESSAGE]` |
+| `/repo` | FN-027 | `/repo URL` |
+| `/changelog` | FN-026 | `/changelog` |
+
+---
+
+### 2.6 Designer
+
+**ID:** AGT-006
+**Modell-Default:** Sonnet (Komponenten), Opus (Design-System)
+
+#### Funktionen
+
+| FN-ID | Funktion | Beschreibung | Parameter | Rueckgabe |
+|-------|----------|-------------|-----------|-----------|
+| FN-028 | UI erstellen | Frontend-Komponente designen + bauen | Anforderungen | Komponente + Styling |
+| FN-029 | Design-System | Tokens/Theme verwalten | Token-Name + Wert | Aktualisiertes Theme |
+| FN-030 | Responsive Check | Responsive-Verhalten pruefen | Komponente | Report (Breakpoints) |
+| FN-031 | a11y Check | Accessibility pruefen | Komponente | WCAG-Report |
+
+#### Commands
+
+| Command | FN-ID | Syntax |
+|---------|-------|--------|
+| `/design-ui` | FN-028 | `/design-ui BESCHREIBUNG` |
+| `/theme` | FN-029 | `/theme [show\|set KEY VALUE]` |
+| `/responsive` | FN-030 | `/responsive KOMPONENTE` |
+| `/a11y` | FN-031 | `/a11y KOMPONENTE` |
+
+---
+
+### 2.7 Analyst
+
+**ID:** AGT-007
+**Modell-Default:** Sonnet (Analyse), Opus (komplexe Vergleiche)
+
+#### Funktionen
+
+| FN-ID | Funktion | Beschreibung | Parameter | Rueckgabe |
+|-------|----------|-------------|-----------|-----------|
+| FN-032 | Repo analysieren | Tiefgehende Inhaltsanalyse | Repo-URL/Pfad | Analyse-Report (Funktionen, Klassen, Deps) |
+| FN-033 | Repos vergleichen | Zwei Repos inhaltlich vergleichen | Repo-A + Repo-B | Vergleichs-Report (Ueberschneidungen, Unique) |
+| FN-034 | Merge planen | Merge-Strategie vorschlagen | Repo-A + Repo-B | Merge-Plan mit Konflikten |
+| FN-035 | Dependency Map | Abhaengigkeits-Karte erstellen | Repo-Pfad | Visueller Dependency-Graph |
+
+#### Commands
+
+| Command | FN-ID | Syntax |
+|---------|-------|--------|
+| `/analyze` | FN-032 | `/analyze REPO` |
+| `/compare` | FN-033 | `/compare REPO-A REPO-B` |
+| `/merge-plan` | FN-034 | `/merge-plan REPO-A REPO-B` |
+| `/deps-map` | FN-035 | `/deps-map REPO` |
+
+---
+
+### 2.8 Doc-Scanner
+
+**ID:** AGT-008
+**Modell-Default:** Haiku (Routine), Sonnet (komplexe Docs)
+
+#### Funktionen
+
+| FN-ID | Funktion | Beschreibung | Parameter | Rueckgabe |
+|-------|----------|-------------|-----------|-----------|
+| FN-036 | URL scannen | Webseite scannen + in DB importieren | URL | Scan-Ergebnis (Entitaeten, Beziehungen) |
+| FN-037 | URL-Liste verwalten | Ueberwachte URLs anzeigen/aendern | — | URL-Liste mit Status |
+| FN-038 | URL hinzufuegen | Neue URL zur Ueberwachung | URL + Scope (Global/Projekt) | Bestaetigung |
+| FN-039 | Diff anzeigen | Aenderungen seit letztem Scan | URL | Diff-Report |
+| FN-040 | KB importieren | Lokale Docs in KB importieren | Pfad + Scope | Import-Report |
+
+#### Commands
+
+| Command | FN-ID | Syntax |
+|---------|-------|--------|
+| `/scan` | FN-036 | `/scan URL` |
+| `/scan-list` | FN-037 | `/scan-list` |
+| `/scan-add` | FN-038 | `/scan-add URL [global\|projekt]` |
+| `/scan-diff` | FN-039 | `/scan-diff URL` |
+| `/kb-import` | FN-040 | `/kb-import PFAD [global\|projekt]` |
+
+---
+
+### 2.9 DevOps
+
+**ID:** AGT-009
+**Modell-Default:** Sonnet (Standard), Opus (Infrastruktur)
+
+#### Funktionen
+
+| FN-ID | Funktion | Beschreibung | Parameter | Rueckgabe |
+|-------|----------|-------------|-----------|-----------|
+| FN-041 | Deployen | Deployment auf Staging/Production | Target (staging/prod) | Deploy-Status |
+| FN-042 | Env verwalten | Environment-Variablen setzen/lesen | Key + Value | Bestaetigung |
+| FN-043 | CI/CD verwalten | Pipeline anzeigen/aendern | Pipeline-Config | Aktualisierte Pipeline |
+| FN-044 | Health-Check | Server-Gesundheit pruefen | — | Health-Report aller Services |
+| FN-045 | Rollback | Letztes Deployment zurueckrollen | — | Rollback-Bestaetigung |
+
+#### Commands
+
+| Command | FN-ID | Syntax |
+|---------|-------|--------|
+| `/deploy` | FN-041 | `/deploy [staging\|prod]` |
+| `/env` | FN-042 | `/env [list\|set KEY VALUE\|get KEY]` |
+| `/ci` | FN-043 | `/ci [show\|edit]` |
+| `/health` | FN-044 | `/health` |
+| `/rollback` | FN-045 | `/rollback` |
+
+---
+
+### 2.10 Dokumentierer (Hybrid)
+
+**ID:** AGT-010
+**Modell-Default:** Haiku (Tool-generiert), Sonnet (Verfeinerung)
+
+#### Funktionen
+
+| FN-ID | Funktion | Beschreibung | Parameter | Rueckgabe |
+|-------|----------|-------------|-----------|-----------|
+| FN-046 | Auto-Docs | Docs ueber Tools generieren (TypeDoc, Swagger) | Projekt-Pfad | Generierte Docs |
+| FN-047 | Docs verfeinern | Tool-Docs manuell verbessern | Doc-Pfad + Kontext | Verfeinerte Docs |
+| FN-048 | Registry fuehren | Funktions- + Endpoint-Registry pflegen | — | Aktuelle Registry |
+| FN-049 | Manual erstellen | User-Manual generieren | Rolle (Admin/Supervisor/Worker) | Manual-Dokument |
+| FN-050 | API-Docs | Swagger/OpenAPI generieren | API-Pfad | OpenAPI Spec |
+
+#### Commands
+
+| Command | FN-ID | Syntax |
+|---------|-------|--------|
+| `/docs` | FN-046 | `/docs [generate\|update]` |
+| `/docs-refine` | FN-047 | `/docs-refine PFAD` |
+| `/registry` | FN-048 | `/registry [fn\|ep\|all]` |
+| `/manual` | FN-049 | `/manual [admin\|supervisor\|worker]` |
+| `/api-docs` | FN-050 | `/api-docs` |
+
+---
+
+## Seite 26 — Kapitel 3: Hooks
+
+### 3.1 Hook-Uebersicht
+
+| Hook-ID | Hook | Matcher | Typ | Blockierend | Beschreibung |
+|---------|------|---------|-----|:-----------:|-------------|
+| H-01 | SessionStart | startup | command | Nein | Kontext aus HippoRAG 2 laden |
+| H-02 | SessionStart | compact | command | Nein | Profile neu laden nach Komprimierung |
+| H-03 | SessionStart | resume | command | Nein | Letzten Stand aus DB laden |
+| H-04 | UserPromptSubmit | — | command | Ja | Eingabe an Berater routen |
+| H-05 | PreToolUse | Write\|Edit | agent | Ja | Security-Check vor Code-Aenderung |
+| H-06 | PreToolUse | Bash | agent | Ja | Gefaehrliche Befehle blockieren |
+| H-07 | PostToolUse | Write\|Edit | command | Nein | Regeln erzwingen + Doc-Tools |
+| H-08 | PostToolUse | Bash | command | Nein | Ergebnis pruefen + DB speichern |
+| H-09 | PostToolUseFailure | — | command | Nein | Fehler analysieren |
+| H-10 | PreCompact | — | command | Nein | Kontext in DB sichern |
+| H-11 | Stop | — | agent | Ja | Tasks-Erledigung verifizieren |
+| H-12 | SubagentStart | — | command | Nein | Kontext + Profile injizieren |
+| H-13 | SubagentStop | — | agent | Ja | Qualitaets-Check |
+| H-14 | Notification | — | command | Nein | Slack/WhatsApp senden |
+| H-15 | TeammateIdle | — | agent | Ja | Quality-Gate vor Pause |
+| H-16 | TaskCompleted | — | agent | Ja | Task-Erledigung verifizieren |
+| H-17 | SessionEnd | — | command | Nein | Session-Summary in DB |
+
+### 3.2 Hook-Konfiguration
+
+Alle Hooks werden in `~/.claude/settings.json` konfiguriert. Vollstaendige Konfiguration siehe Anhang C.
+
+### 3.3 Hook-Einstellungen
+
+| Einstellung | Beschreibung | Default |
+|------------|-------------|---------|
+| `timeout` | Max. Ausfuehrungszeit in ms | 10000 (command), 30000 (agent) |
+| `matcher` | Regex-Pattern fuer Filter | Tool-Name oder Event-Typ |
+| `type` | Hook-Typ | command, prompt, agent |
+| `async` | Asynchron ausfuehren | false |
+
+---
+
+## Seite 30 — Kapitel 4: Gehirn-System
+
+### 4.1 HippoRAG 2
+
+**Komponenten:** Neo4j (Graph) + Qdrant (Vektoren) + PageRank
+
+**Wie es funktioniert:**
+1. Neues Wissen kommt rein (Code, Entscheidungen, Docs)
+2. Entity-Extraktion: Entitaeten + Beziehungen erkennen
+3. Graph-Update: Neue Knoten + Kanten in Neo4j
+4. Embedding: Vektor-Repraesentation in Qdrant
+5. Bei Abfrage: PageRank bewertet Relevanz + Graph-Traversierung
+
+**Einstellungen:**
+
+| Einstellung | Default | Beschreibung |
+|------------|---------|-------------|
+| `embedding_model` | all-MiniLM-L6-v2 | Lokales Embedding-Modell |
+| `pagerank_damping` | 0.85 | PageRank Daempfungsfaktor |
+| `pagerank_iterations` | 100 | Max. Iterationen |
+| `similarity_threshold` | 0.7 | Min. Aehnlichkeit fuer Ergebnisse |
+| `max_results` | 10 | Max. Ergebnisse pro Abfrage |
+
+### 4.2 Agentic RAG
+
+Steuert die Suchstrategie intelligent:
+- Entscheidet ob Suche noetig ist
+- Waehlt Suchstrategie (Graph, Vektor, Hybrid)
+- Bewertet Ergebnis-Qualitaet
+- Korrigiert bei schlechten Ergebnissen
+
+### 4.3 Agentic Learning Graphs
+
+Erweitert das Wissensnetz automatisch:
+- Jede Interaktion kann neue Knoten/Kanten erzeugen
+- Graph waechst mit jeder Session
+- Naechste Abfrage profitiert von vorherigem Wissen
+
+---
+
+## Seite 34 — Kapitel 5: Profil-System
+
+### 5.1 Wie Profile funktionieren
+
+```
+Skill-Datei unter ~/.claude/skills/PROFILNAME/SKILL.md
+  → Wird nur geladen wenn aktiviert
+  → Hooks erzwingen Regeln ausserhalb des Kontexts
+  → Auto-Reload nach Komprimierung
+```
+
+### 5.2 Profil verwalten
+
+| Aktion | Command | Beispiel |
+|--------|---------|---------|
+| Laden | `/profil-laden NAME` | `/profil-laden python-regeln` |
+| Auflisten | `/profil` | `/profil` |
+| Deaktivieren | `/profil-laden --remove NAME` | `/profil-laden --remove python-regeln` |
+
+### 5.3 Eigenes Profil erstellen
+
+```bash
+mkdir -p ~/.claude/skills/mein-profil
+cat > ~/.claude/skills/mein-profil/SKILL.md << 'EOF'
+---
+name: "mein-profil"
+description: "Beschreibung"
+---
+# Regeln
+- ...
+EOF
+```
+
+---
+
+## Seite 36 — Kapitel 6: Fragenkatalog
+
+### 6.1 Fragen-Typen
+
+| Typ | Symbol | Agent stoppt? | Notification? |
+|-----|:------:|:------------:|:------------:|
+| Blocker | BLOCKER | Ja | Sofort |
+| Offen | OFFEN | Nein | Bei Schwelle |
+| Beantwortet | ERLEDIGT | — | — |
+
+### 6.2 Fragenkatalog einsehen
+
+| Command | Was |
+|---------|-----|
+| `/katalog` | Alle offenen Fragen |
+| `/katalog blocker` | Nur Blocker |
+| `/katalog offen` | Nur offene |
+| `/katalog beantwortet` | Archiv |
+
+---
+
+## Seite 38 — Kapitel 7: Multi-Model Routing
+
+| Stufe | Modell | Trigger | Kosten-Faktor |
+|-------|--------|---------|:-------------:|
+| 1 | Haiku | Einfache Tasks | 5% |
+| 2 | Sonnet | Standard-Tasks | 30% |
+| 3 | Opus | Komplexe Tasks | 100% |
+
+**Fallback-Kette:** Opus → Sonnet → Haiku (bei Rate-Limit)
+
+**Einstellungen:**
+
+| Einstellung | Default | Beschreibung |
+|------------|---------|-------------|
+| `default_model` | sonnet | Standard wenn nicht anders zugewiesen |
+| `auto_routing` | true | Berater weist automatisch zu |
+| `fallback_enabled` | true | Automatischer Fallback bei Rate-Limit |
+
+---
+
+## Seite 39 — Kapitel 8: Kommunikation
+
+### 8.1 Kanael-Einstellungen
+
+| Kanal | Config-Key | Einrichtung |
+|-------|-----------|------------|
+| Terminal | — | Standard, immer verfuegbar |
+| Slack | `slack.webhook_url` | Webhook URL in communication.json |
+| WhatsApp | `whatsapp.token` | Meta Business API Token |
+| Linear | `linear.api_key` | Linear API Key |
+
+### 8.2 Notification-Einstellungen
+
+| Einstellung | Default | Optionen |
+|------------|---------|----------|
+| `default_channel` | slack | slack, whatsapp, linear, all |
+| `notify_on` | blocker, fertig | blocker, fertig, fehler, meilenstein, frage |
+| `quiet_hours` | null | "22:00-07:00" (keine Notifications) |
+
+---
+
+## Seite 41 — Kapitel 9: Connectoren + MCP
+
+### 9.1 Installierte MCP-Server
+
+| Server | Zweck | Port |
+|--------|-------|:----:|
+| rag-api | Gehirn-System Zugriff | 8100 |
+| doc-scanner | Web-Docs scannen | 8101 |
+| github | GitHub Integration | — |
+| notion | Notion Integration | — |
+
+### 9.2 Neuen Connector hinzufuegen
+
+```bash
+# MCP-Server installieren
+npm install -g @example/mcp-server-name
+
+# In Claude Code registrieren
+claude mcp add name -- npx @example/mcp-server-name
+
+# Pruefen
+claude mcp list
+```
+
+---
+
+## Seite 43 — Kapitel 10: Web-Scanner
+
+### 10.1 URLs verwalten
+
+```bash
+/scan-add https://docs.example.com global
+/scan-add https://api.project.com projekt
+/scan-list
+```
+
+### 10.2 Scan-Einstellungen
+
+| Einstellung | Default | Beschreibung |
+|------------|---------|-------------|
+| `interval_days` | 7 | Scan-Intervall in Tagen |
+| `auto_import` | true | Automatisch in HippoRAG 2 importieren |
+| `notify_changes` | true | Bei Aenderungen benachrichtigen |
+| `max_depth` | 3 | Max. Link-Tiefe beim Crawlen |
+| `js_rendering` | true | JavaScript rendern (Puppeteer) |
+
+---
+
+## Seite 45 — Kapitel 11: Datenbanken
+
+### 11.1 Neo4j Administration
+
+| Aktion | Befehl/URL |
+|--------|-----------|
+| Dashboard | http://IP:7474 |
+| Backup | `docker exec neo4j neo4j-admin database dump neo4j` |
+| Restore | `docker exec neo4j neo4j-admin database load neo4j` |
+| Logs | `docker logs neo4j` |
+| Neustart | `docker restart neo4j` |
+
+### 11.2 Qdrant Administration
+
+| Aktion | Befehl/URL |
+|--------|-----------|
+| Dashboard | http://IP:6333/dashboard |
+| Collections | `curl http://IP:6333/collections` |
+| Snapshot | `curl -X POST http://IP:6333/collections/NAME/snapshots` |
+| Logs | `docker logs qdrant` |
+
+### 11.3 Redis Administration
+
+| Aktion | Befehl |
+|--------|--------|
+| Verbinden | `docker exec -it redis redis-cli -a PASSWORT` |
+| Alle Keys | `KEYS *` |
+| Speicher | `INFO memory` |
+| Flush | `FLUSHDB` (VORSICHT!) |
+| Backup | Automatisch via appendonly |
+
+---
+
+## Seite 48 — Kapitel 12: Funktions-Registry
+
+Alle Funktionen werden mit eindeutiger ID registriert.
+
+**Format:** FN-XXX (dreistellig, fortlaufend)
+
+| FN-ID | Agent | Funktion | Parameter | Abhaengigkeiten |
+|-------|-------|----------|-----------|----------------|
+| FN-001 | Berater | Briefing starten | Nutzer-Eingabe | — |
+| FN-002 | Berater | Komplexitaet bewerten | Task | — |
+| FN-003 | Berater | Task-Queue erstellen | Briefing | FN-001 |
+| FN-004 | Berater | Agent zuweisen | Task + Agent | FN-003 |
+| FN-005 | Berater | Fortschritt melden | Meilenstein | FN-004 |
+| FN-006 | Berater | Fragenkatalog verwalten | Frage | — |
+| FN-007 | Berater | Fallback ausfuehren | Fehler | FN-004 |
+| FN-008 | Berater | Alle stoppen | — | — |
+| FN-009 | Architekt | Design erstellen | Anforderungen | FN-003 |
+| FN-010 | Architekt | Veto ausueben | Design | FN-009 |
+| FN-011 | Architekt | Abhaengigkeiten mappen | Feature | FN-009 |
+| FN-012 | Architekt | ADR schreiben | Entscheidung | FN-009 |
+| FN-013 | Coder | Implementieren | Task + Arch. | FN-009 |
+| FN-014 | Coder | Refactoren | Feedback | FN-023 |
+| FN-015 | Coder | Code pruefen | Anweisung | — |
+| FN-016 | Coder | Funktion registrieren | FN-Details | FN-013 |
+| FN-017 | Coder | Endpoint registrieren | EP-Details | FN-013 |
+| FN-018 | Tester | Tests schreiben | Code | FN-013 |
+| FN-019 | Tester | Tests ausfuehren | Test-Pfad | FN-018 |
+| FN-020 | Tester | Debuggen | Fehler | FN-019 |
+| FN-021 | Tester | Coverage messen | Projekt | FN-019 |
+| FN-022 | Tester | Regression testen | Fix | FN-020 |
+| FN-023 | Reviewer | Code reviewen | Diff | FN-013 |
+| FN-024 | Reviewer | Auto-Fix | Befund | FN-023 |
+| FN-025 | Reviewer | Commit + Push | Dateien | FN-023 |
+| FN-026 | Reviewer | Changelog erstellen | Commit | FN-025 |
+| FN-027 | Reviewer | Repo konfigurieren | URL | — |
+| FN-028 | Designer | UI erstellen | Anforderungen | FN-009 |
+| FN-029 | Designer | Design-System | Token | — |
+| FN-030 | Designer | Responsive Check | Komponente | FN-028 |
+| FN-031 | Designer | a11y Check | Komponente | FN-028 |
+| FN-032 | Analyst | Repo analysieren | Repo | — |
+| FN-033 | Analyst | Repos vergleichen | Repo-A + B | FN-032 |
+| FN-034 | Analyst | Merge planen | Repo-A + B | FN-033 |
+| FN-035 | Analyst | Dependency Map | Repo | FN-032 |
+| FN-036 | Doc-Scanner | URL scannen | URL | — |
+| FN-037 | Doc-Scanner | URL-Liste | — | — |
+| FN-038 | Doc-Scanner | URL hinzufuegen | URL + Scope | — |
+| FN-039 | Doc-Scanner | Diff anzeigen | URL | FN-036 |
+| FN-040 | Doc-Scanner | KB importieren | Pfad | — |
+| FN-041 | DevOps | Deployen | Target | FN-025 |
+| FN-042 | DevOps | Env verwalten | Key + Value | — |
+| FN-043 | DevOps | CI/CD verwalten | Config | — |
+| FN-044 | DevOps | Health-Check | — | — |
+| FN-045 | DevOps | Rollback | — | FN-041 |
+| FN-046 | Dokumentierer | Auto-Docs | Pfad | FN-025 |
+| FN-047 | Dokumentierer | Docs verfeinern | Pfad | FN-046 |
+| FN-048 | Dokumentierer | Registry fuehren | — | FN-016/017 |
+| FN-049 | Dokumentierer | Manual erstellen | Rolle | FN-048 |
+| FN-050 | Dokumentierer | API-Docs | API-Pfad | FN-017 |
+
+---
+
+## Seite 52 — Kapitel 13: Endpoint-Registry
+
+**Format:** EP-XXX (dreistellig, fortlaufend)
+
+Die Endpoint-Registry wird vom Coder (FN-017) befuellt und vom Dokumentierer (FN-048) gepflegt.
+
+Beispiel-Struktur:
+
+| EP-ID | Pfad | Methode | Beschreibung | Parameter | Response | Auth | Abhaengigkeiten |
+|-------|------|---------|-------------|-----------|----------|:----:|----------------|
+| EP-001 | /api/auth/login | POST | User Login | email, password | JWT Token | Nein | — |
+| EP-002 | /api/auth/refresh | POST | Token erneuern | refresh_token | Neuer JWT | Ja | EP-001 |
+| EP-003 | /api/users | GET | Alle User listen | page, limit | User-Array | Ja | EP-001 |
+
+---
+
+## Seite 55 — Kapitel 14: Einstellungen
+
+### 14.1 Globale Einstellungen
+
+| Einstellung | Pfad | Beschreibung |
+|------------|------|-------------|
+| Hooks | `~/.claude/settings.json` | Hook-Konfiguration |
+| Agenten | `~/.claude/agents/*.md` | Agenten-Profile |
+| Skills | `~/.claude/skills/*/SKILL.md` | Profil-Skills |
+| MCP | `~/.claude.json` | MCP-Server (maschinenspezifisch) |
+| Kommunikation | `~/.claude/config/communication.json` | Slack/WhatsApp/Linear |
+| Datenbanken | `~/.claude/config/databases.yaml` | DB-Verbindungen |
+| Active Profiles | `~/.claude/active-profiles.json` | Aktuell aktive Profile |
+
+### 14.2 Temperatur-Einstellungen
+
+| Agent | Temperatur | Begruendung |
+|-------|:----------:|-------------|
+| Berater | 0.3 | Konsistente Orchestrierung |
+| Architekt | 0.2 | Praezise Design-Entscheidungen |
+| Coder | 0.1 | Minimale Halluzination im Code |
+| Tester | 0.1 | Exakte Test-Generierung |
+| Reviewer | 0.2 | Konsistente Reviews |
+| Designer | 0.5 | Etwas Kreativitaet erlaubt |
+| Analyst | 0.1 | Praezise Analyse |
+| Doc-Scanner | 0.1 | Exakte Extraktion |
+| DevOps | 0.1 | Keine Fehler bei Deployment |
+| Dokumentierer | 0.3 | Lesbare Texte |
+
+---
+
+## Seite 60 — Kapitel 15: Administration
+
+### 15.1 System starten/stoppen
+
+```bash
+# Alles starten
+docker compose up -d
+
+# Alles stoppen
+docker compose down
+
+# Einzelnen Service neustarten
+docker compose restart SERVICE_NAME
+
+# Logs ansehen
+docker compose logs -f SERVICE_NAME
+```
+
+### 15.2 Backup + Restore
+
+```bash
+# Backup aller Datenbanken
+bash scripts/backup.sh
+
+# Restore
+bash scripts/restore.sh BACKUP_DATUM
+```
+
+### 15.3 Updates
+
+```bash
+# Claude Code CLI updaten
+npm update -g @anthropic-ai/claude-code
+
+# Docker Images updaten
+docker compose pull
+docker compose up -d
+
+# Agenten-Profile updaten
+bash scripts/sync-setup.sh pull
+```
+
+### 15.4 User-Rollen verwalten
+
+| Rolle | Rechte |
+|-------|--------|
+| Admin | Alles — System, Agenten, DBs, Deployment |
+| Supervisor | Agenten steuern, Reviews, Reports — kein DB/Server-Zugang |
+| Worker | Eigene Tasks, Code schreiben — kein Admin-Zugang |
+
+---
+
+## Seite 65 — Kapitel 16: Fehlerbehebung
+
+| Problem | Ursache | Loesung |
+|---------|---------|---------|
+| Agent antwortet nicht | Rate-Limit oder Model-Fehler | Fallback greift, oder `/health` pruefen |
+| Hook blockiert | Sicherheits-Check schlaegt an | Hook-Feedback lesen, Code anpassen |
+| DB-Verbindung weg | Container gestoppt | `docker compose restart SERVICE` |
+| Profil nach Compact weg | Reload-Hook defekt | `cat ~/.claude/active-profiles.json` pruefen |
+| Notification kommt nicht | Webhook-URL falsch | `communication.json` pruefen |
+| Langsame Antworten | Zu viele parallele Agenten | `max_parallel_agents` reduzieren |
+| Wissensgraph leer | HippoRAG 2 nicht verbunden | `databases.yaml` + Neo4j Container pruefen |
+
+---
+
+## Seite 68 — Anhang A: Alle Commands
+
+| Command | Agent | FN-ID | Beschreibung |
+|---------|-------|-------|-------------|
+| `/briefing` | Berater | FN-001 | Strukturiertes Briefing starten |
+| `/plan` | Berater | FN-003 | Aufgabenplan erstellen |
+| `/delegate` | Berater | FN-004 | Task an Agent zuweisen |
+| `/katalog` | Berater | FN-006 | Fragenkatalog anzeigen |
+| `/fortschritt` | Berater | FN-005 | Status aller Agenten |
+| `/stop-alle` | Berater | FN-008 | Alle stoppen |
+| `/weiter` | Berater | — | Nach Blocker fortsetzen |
+| `/design` | Architekt | FN-009 | System-Design erstellen |
+| `/veto` | Architekt | FN-010 | Design blockieren |
+| `/deps` | Architekt | FN-011 | Abhaengigkeiten zeigen |
+| `/adr` | Architekt | FN-012 | Decision Record schreiben |
+| `/implement` | Coder | FN-013 | Code implementieren |
+| `/refactor` | Coder | FN-014 | Code ueberarbeiten |
+| `/check` | Coder | FN-015 | Code pruefen |
+| `/register` | Coder | FN-016/017 | Funktion/Endpoint registrieren |
+| `/templates` | Coder | — | Templates anzeigen |
+| `/test` | Tester | FN-019 | Tests ausfuehren |
+| `/debug` | Tester | FN-020 | Fehler analysieren |
+| `/coverage` | Tester | FN-021 | Coverage anzeigen |
+| `/regression` | Tester | FN-022 | Regressions-Tests |
+| `/review` | Reviewer | FN-023 | Code-Review |
+| `/commit` | Reviewer | FN-025 | Commit + Push |
+| `/repo` | Reviewer | FN-027 | Repo-URL setzen |
+| `/changelog` | Reviewer | FN-026 | Changelog erstellen |
+| `/design-ui` | Designer | FN-028 | UI-Komponente erstellen |
+| `/theme` | Designer | FN-029 | Design-System verwalten |
+| `/responsive` | Designer | FN-030 | Responsive-Check |
+| `/a11y` | Designer | FN-031 | Accessibility-Check |
+| `/analyze` | Analyst | FN-032 | Repo analysieren |
+| `/compare` | Analyst | FN-033 | Repos vergleichen |
+| `/merge-plan` | Analyst | FN-034 | Merge-Strategie |
+| `/deps-map` | Analyst | FN-035 | Dependency-Map |
+| `/scan` | Doc-Scanner | FN-036 | URL scannen |
+| `/scan-list` | Doc-Scanner | FN-037 | URL-Liste |
+| `/scan-add` | Doc-Scanner | FN-038 | URL hinzufuegen |
+| `/scan-diff` | Doc-Scanner | FN-039 | Aenderungen zeigen |
+| `/kb-import` | Doc-Scanner | FN-040 | KB importieren |
+| `/deploy` | DevOps | FN-041 | Deployment starten |
+| `/env` | DevOps | FN-042 | Env-Variablen |
+| `/ci` | DevOps | FN-043 | CI/CD Pipeline |
+| `/health` | DevOps | FN-044 | Health-Check |
+| `/rollback` | DevOps | FN-045 | Rollback |
+| `/docs` | Dokumentierer | FN-046 | Auto-Docs generieren |
+| `/docs-refine` | Dokumentierer | FN-047 | Docs verfeinern |
+| `/registry` | Dokumentierer | FN-048 | Registry anzeigen |
+| `/manual` | Dokumentierer | FN-049 | Manual erstellen |
+| `/api-docs` | Dokumentierer | FN-050 | API-Docs generieren |
+| `/status` | Alle | — | Agent-Status |
+| `/memory` | Alle | — | DB durchsuchen |
+| `/save` | Alle | — | In DB speichern |
+| `/fragen` | Alle | — | Offene Fragen |
+| `/profil` | Alle | — | Aktive Profile |
+| `/cache` | Alle | — | Cache abfragen |
+| `/tools` | Alle | — | Verfuegbare Tools |
+
+---
+
+## Seite 70 — Anhang B: Alle Rules
+
+[Vollstaendige Rule-Liste: Siehe Projektplanung Kapitel 3, alle R-XX-XX Rules]
+
+---
+
+## Seite 73 — Anhang C: Alle Hook-Konfigurationen
+
+[Vollstaendige settings.json: Siehe Runbook Schritt 4.2]

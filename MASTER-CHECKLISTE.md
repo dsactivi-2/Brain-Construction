@@ -126,14 +126,14 @@ Jeder Punkt muss abgehakt werden bevor das Projekt als fertig gilt.
 - [x] Phase 4 gepusht — 2026-02-17 23:01
 
 ## Phase 5: User-Manual Detail
-- [ ] Inhaltsverzeichnis mit Seitennummern
-- [ ] Alle Funktionen dokumentiert
-- [ ] Alle Einstellungen dokumentiert
-- [ ] Funktions- und Endpoint-Registry (IDs: FN-001, EP-001)
-- [ ] Version: Admin
-- [ ] Version: Supervisor
-- [ ] Version: Worker
-- [ ] Phase 5 gepusht + geprueft
+- [x] Inhaltsverzeichnis mit Seitennummern — 2026-02-17 04:05
+- [x] Alle Funktionen dokumentiert — 2026-02-17 04:05
+- [x] Alle Einstellungen dokumentiert — 2026-02-17 04:05
+- [x] Funktions- und Endpoint-Registry (IDs: FN-001, EP-001) — 2026-02-17 04:05
+- [x] Version: Admin — 2026-02-17 04:05
+- [x] Version: Supervisor — 2026-02-17 04:05
+- [x] Version: Worker — 2026-02-17 04:06
+- [x] Phase 5 gepusht + geprueft — 2026-02-17 04:15
 
 ## Phase 6: User-Manual Kurz
 - [ ] Einfache Sprache
