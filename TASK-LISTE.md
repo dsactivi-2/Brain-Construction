@@ -23,7 +23,7 @@ Runbook    Setup-Anleitung
 Phase 5   Phase 6
 Detail    Kurz
 Manual    Manual
-(fertig)  ◄── AKTIV
+(fertig)  (fertig)
   │         │
   └────┬────┘
        ▼
@@ -40,5 +40,5 @@ Manual    Manual
 | 3 | Setup-Anleitung | Fertig | — |
 | 4 | Installations-Guide | Fertig | — |
 | 5 | User-Manual Detail | Fertig | — |
-| 6 | User-Manual Kurz | Aktiv | Phase 4 |
+| 6 | User-Manual Kurz | Fertig | — |
 | 7 | Finaler Review + Push | Wartend | Phase 5 + 6 |

@@ -136,13 +136,13 @@ Jeder Punkt muss abgehakt werden bevor das Projekt als fertig gilt.
 - [x] Phase 5 gepusht + geprueft — 2026-02-17 04:15
 
 ## Phase 6: User-Manual Kurz
-- [ ] Einfache Sprache
-- [ ] Skizzen und Diagramme
-- [ ] Schritt-fuer-Schritt Anleitungen
-- [ ] Version: Admin
-- [ ] Version: Supervisor
-- [ ] Version: Worker
-- [ ] Phase 6 gepusht + geprueft
+- [x] Einfache Sprache — 2026-02-17 04:13
+- [x] Skizzen und Diagramme — 2026-02-17 04:13
+- [x] Schritt-fuer-Schritt Anleitungen — 2026-02-17 04:13
+- [x] Version: Admin — 2026-02-17 04:13
+- [x] Version: Supervisor — 2026-02-17 04:11
+- [x] Version: Worker — 2026-02-17 04:11
+- [x] Phase 6 gepusht + geprueft — 2026-02-17 04:18
 
 ## Phase 7: Finaler Review
 - [ ] Alle Phasen geprueft
