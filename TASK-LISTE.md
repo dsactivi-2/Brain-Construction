@@ -27,7 +27,7 @@ Manual    Manual
   │         │
   └────┬────┘
        ▼
-  Phase 7: Finaler Review
+  Phase 7: Finaler Review (fertig)
 ```
 
 ## Status
@@ -41,4 +41,4 @@ Manual    Manual
 | 4 | Installations-Guide | Fertig | — |
 | 5 | User-Manual Detail | Fertig | — |
 | 6 | User-Manual Kurz | Fertig | — |
-| 7 | Finaler Review + Push | Wartend | Phase 5 + 6 |
+| 7 | Finaler Review + Push | Fertig | — |
