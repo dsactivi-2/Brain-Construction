@@ -3,16 +3,31 @@
 FastMCP Server der alle Brain-Tools als MCP-Tools exponiert.
 Wird von Claude Code als MCP-Server genutzt (stdio Transport).
 
-Starten: python server.py
-Oder via Claude Code settings.json: mcpServers.brain-tools
+Optimierungen:
+- Pre-Warm: DB-Verbindungen + Embedding-Modell beim Start laden
+- Error Handling: Strukturierte Fehler-Antworten statt raw Exceptions
+- Caching: Core Memory mit 30s TTL
+- Health-Check: Diagnose-Tool fuer alle 4 DBs
 """
 
 import os
 import sys
+import json
+import time
+import logging
 from pathlib import Path
 from typing import Optional, List
+from functools import lru_cache
 
 from fastmcp import FastMCP
+
+# Logging konfigurieren
+logging.basicConfig(
+    level=logging.INFO,
+    format="%(asctime)s [%(levelname)s] %(message)s",
+    handlers=[logging.StreamHandler(sys.stderr)],
+)
+log = logging.getLogger("brain-tools")
 
 # Brain-Modul-Pfad hinzufuegen
 BRAIN_DIR = os.environ.get(
@@ -22,7 +37,77 @@ BRAIN_DIR = os.environ.get(
 PROJECT_DIR = str(Path(__file__).parent.parent.parent)
 sys.path.insert(0, PROJECT_DIR)
 
+# Suppress noisy HuggingFace warnings
+os.environ.setdefault("HF_HUB_DISABLE_SYMLINKS_WARNING", "1")
+os.environ.setdefault("TOKENIZERS_PARALLELISM", "false")
+
 mcp = FastMCP("Brain-Tools")
+
+
+# ============================================================
+# Pre-Warm: Verbindungen + Modell beim Import vorbereiten
+# ============================================================
+
+def _prewarm():
+    """Laedt DB-Verbindungen und Embedding-Modell im Hintergrund."""
+    try:
+        from brain.db import get_config
+        get_config()
+        log.info("Config geladen")
+    except Exception as e:
+        log.warning(f"Config nicht geladen: {e}")
+
+    # Embedding-Modell vorladen (3s einsparen beim ersten Tool-Call)
+    try:
+        from brain.embeddings import _get_model
+        _get_model()
+        log.info("Embedding-Modell geladen (all-MiniLM-L6-v2)")
+    except Exception as e:
+        log.warning(f"Embedding-Modell nicht geladen: {e}")
+
+
+# ============================================================
+# Error Handling Wrapper
+# ============================================================
+
+def _safe_call(fn, **kwargs):
+    """Wrapper der strukturierte Fehler zurueckgibt statt Exceptions."""
+    try:
+        return fn(**kwargs)
+    except ConnectionError as e:
+        return {"error": "connection_error", "message": str(e), "hint": "Ist Docker/DB gestartet?"}
+    except ImportError as e:
+        return {"error": "import_error", "message": str(e), "hint": "pip install -r requirements.txt"}
+    except Exception as e:
+        return {"error": type(e).__name__, "message": str(e)}
+
+
+# ============================================================
+# Caching: Core Memory (30s TTL)
+# ============================================================
+
+_core_memory_cache = {}
+_core_memory_cache_time = 0
+_CACHE_TTL = 30  # Sekunden
+
+
+def _cached_core_memory_read(block=None):
+    """Core Memory mit 30s Cache (haeufigster Read-Call)."""
+    global _core_memory_cache, _core_memory_cache_time
+    now = time.time()
+    cache_key = block or "__all__"
+
+    if now - _core_memory_cache_time < _CACHE_TTL and cache_key in _core_memory_cache:
+        result = _core_memory_cache[cache_key]
+        result["_cached"] = True
+        return result
+
+    from brain.core_memory.reader import core_memory_read as _read
+    result = _read(block)
+    _core_memory_cache[cache_key] = result
+    _core_memory_cache_time = now
+    result["_cached"] = False
+    return result
 
 
 # ============================================================
@@ -39,8 +124,7 @@ def core_memory_read(block: Optional[str] = None) -> dict:
     Args:
         block: Optional — Name des Blocks. Wenn leer: alle Blocks.
     """
-    from brain.core_memory.reader import core_memory_read as _read
-    return _read(block)
+    return _safe_call(_cached_core_memory_read, block=block)
 
 
 @mcp.tool()
@@ -54,8 +138,13 @@ def core_memory_update(block: str, content: str) -> dict:
         block: Name des Blocks (USER, PROJEKT, ENTSCHEIDUNGEN, FEHLER-LOG, AKTUELLE-ARBEIT).
         content: Neuer Inhalt.
     """
+    # Cache invalidieren bei Update
+    global _core_memory_cache, _core_memory_cache_time
+    _core_memory_cache = {}
+    _core_memory_cache_time = 0
+
     from brain.core_memory.writer import core_memory_update as _update
-    return _update(block, content)
+    return _safe_call(_update, block=block, content=content)
 
 
 # ============================================================
@@ -81,7 +170,7 @@ def memory_search(
         min_score: Min Aehnlichkeit 0.0-1.0 (default: 0.5).
     """
     from brain.auto_memory.recall import search_memories
-    return search_memories(query, scopes=scopes, top_k=top_k, min_score=min_score)
+    return _safe_call(search_memories, query=query, scopes=scopes, top_k=top_k, min_score=min_score)
 
 
 @mcp.tool()
@@ -110,7 +199,7 @@ def memory_store(
         priority: Priority-Score 1-10.
     """
     from brain.auto_memory.capture import extract_and_store
-    return extract_and_store(text, scope=scope, type=type, priority=priority)
+    return _safe_call(extract_and_store, text=text, scope=scope, type=type, priority=priority)
 
 
 # ============================================================
@@ -130,7 +219,7 @@ def hipporag_retrieve(query: str, top_k: int = 5) -> list:
         top_k: Max Ergebnisse (default: 5).
     """
     from brain.hipporag_service.retriever import hipporag_retrieve as _retrieve
-    return _retrieve(query, top_k=top_k)
+    return _safe_call(_retrieve, query=query, top_k=top_k)
 
 
 @mcp.tool()
@@ -144,7 +233,7 @@ def hipporag_ingest(text: str) -> dict:
         text: Der zu indizierende Text.
     """
     from brain.hipporag_service.indexer import hipporag_ingest as _ingest
-    return _ingest(text)
+    return _safe_call(_ingest, text=text)
 
 
 # ============================================================
@@ -156,14 +245,14 @@ def rag_route(query: str) -> dict:
     """Automatischer Multi-Source Router (S4).
 
     Entscheidet selbststaendig welche Datenbank(en) zu durchsuchen sind.
-    Sucht parallel in S2 (Qdrant), S3 (Neo4j), S6 (PostgreSQL).
+    Sucht in S2 (Qdrant), S3 (Neo4j), S6 (PostgreSQL).
     Nutze dies wenn unklar ist wo die Information liegt.
 
     Args:
         query: Suchtext.
     """
     from brain.agentic_rag.router import rag_route as _route
-    return _route(query)
+    return _safe_call(_route, query=query)
 
 
 # ============================================================
@@ -181,7 +270,7 @@ def learning_graph_update(session_data: dict) -> dict:
         session_data: Dict mit session_id, entities, tools_used.
     """
     from brain.learning_graphs.patterns import learning_graph_update as _update
-    return _update(session_data)
+    return _safe_call(_update, session_data=session_data)
 
 
 # ============================================================
@@ -200,7 +289,7 @@ def conversation_search(query: str, limit: int = 10) -> list:
         limit: Max Ergebnisse (default: 10).
     """
     from brain.recall_memory.search import conversation_search as _search
-    return _search(query, limit=limit)
+    return _safe_call(_search, query=query, limit=limit)
 
 
 @mcp.tool()
@@ -222,7 +311,85 @@ def conversation_search_date(
         limit: Max Ergebnisse (default: 20).
     """
     from brain.recall_memory.search import conversation_search_date as _search_date
-    return _search_date(start, end, agent=agent, limit=limit)
+    return _safe_call(_search_date, start=start, end=end, agent=agent, limit=limit)
+
+
+# ============================================================
+# Health-Check Tool
+# ============================================================
+
+@mcp.tool()
+def brain_health() -> dict:
+    """Prueft alle Brain-System Verbindungen (Diagnose-Tool).
+
+    Testet: Qdrant, Neo4j, Redis, PostgreSQL, SQLite, Embeddings, Core Memory.
+    Nutze dies bei Problemen oder zum System-Check.
+    """
+    status = {}
+
+    # Qdrant
+    try:
+        from brain.db import get_qdrant
+        client = get_qdrant()
+        cols = client.get_collections()
+        status["qdrant"] = {"ok": True, "collections": len(cols.collections)}
+    except Exception as e:
+        status["qdrant"] = {"ok": False, "error": str(e)}
+
+    # Neo4j
+    try:
+        from brain.db import get_neo4j
+        driver = get_neo4j()
+        driver.verify_connectivity()
+        status["neo4j"] = {"ok": True}
+    except Exception as e:
+        status["neo4j"] = {"ok": False, "error": str(e)}
+
+    # Redis
+    try:
+        from brain.db import get_redis
+        r = get_redis()
+        r.ping()
+        status["redis"] = {"ok": True}
+    except Exception as e:
+        status["redis"] = {"ok": False, "error": str(e)}
+
+    # PostgreSQL
+    try:
+        from brain.db import get_postgres
+        conn = get_postgres()
+        cur = conn.cursor()
+        cur.execute("SELECT count(*) FROM conversations")
+        count = cur.fetchone()[0]
+        status["postgresql"] = {"ok": True, "conversations": count}
+    except Exception as e:
+        status["postgresql"] = {"ok": False, "error": str(e)}
+
+    # SQLite
+    try:
+        from brain.db import get_sqlite
+        conn = get_sqlite()
+        cur = conn.execute("SELECT count(*) FROM conversations")
+        count = cur.fetchone()[0]
+        status["sqlite"] = {"ok": True, "conversations": count}
+    except Exception as e:
+        status["sqlite"] = {"ok": False, "error": str(e)}
+
+    # Core Memory
+    try:
+        from brain.core_memory.reader import core_memory_read as _read
+        cm = _read()
+        blocks = len(cm.get("blocks", {}))
+        status["core_memory"] = {"ok": True, "blocks": blocks}
+    except Exception as e:
+        status["core_memory"] = {"ok": False, "error": str(e)}
+
+    # Summary
+    total = len(status)
+    ok = sum(1 for v in status.values() if v["ok"])
+    status["_summary"] = f"{ok}/{total} services healthy"
+
+    return status
 
 
 # ============================================================
@@ -230,4 +397,5 @@ def conversation_search_date(
 # ============================================================
 
 if __name__ == "__main__":
+    _prewarm()
     mcp.run()

@@ -3,9 +3,12 @@
     "brain-tools": {
       "command": "python",
       "args": ["C:/Users/ds/Desktop/claude-agent-team/mcp-servers/brain-tools/server.py"],
+      "cwd": "C:/Users/ds/Desktop/claude-agent-team",
       "env": {
         "BRAIN_DIR": "C:/Users/ds/Desktop/claude-agent-team/brain",
-        "CONFIG_DIR": "C:/Users/ds/Desktop/claude-agent-team/config"
+        "CONFIG_DIR": "C:/Users/ds/Desktop/claude-agent-team/config",
+        "HF_HUB_DISABLE_SYMLINKS_WARNING": "1",
+        "TOKENIZERS_PARALLELISM": "false"
       }
     }
   },

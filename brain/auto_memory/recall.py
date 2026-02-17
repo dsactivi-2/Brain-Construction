@@ -30,7 +30,7 @@ def search_memories(
     """
     from brain.embeddings import embed_text
     from brain.db import get_qdrant
-    from qdrant_client.models import Filter, FieldCondition, MatchAny
+    from qdrant_client.models import Filter, FieldCondition, MatchAny, SearchParams
 
     client = get_qdrant()
     query_vector = embed_text(query)
@@ -48,6 +48,10 @@ def search_memories(
         query_filter=search_filter,
         limit=top_k,
         score_threshold=min_score,
+        search_params=SearchParams(
+            hnsw_ef=128,          # Search ef (hoeher = genauer, default: ~top_k*2)
+            exact=False,          # Approximate (HNSW), nicht brute-force
+        ),
     )
 
     memories = []
