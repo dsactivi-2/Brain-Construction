@@ -5,6 +5,7 @@ Orchestriert GraphRepository, GraphEmbeddingRepository und Embedding-Generierung
 """
 
 import uuid
+import logging
 from datetime import datetime, timezone
 from typing import Callable, List, Optional
 
@@ -13,6 +14,8 @@ from brain.knowledge_graph.extraction import (
     extract_entity_names,
     extract_relations,
 )
+
+_logger = logging.getLogger(__name__)
 
 
 class KnowledgeGraphService:
@@ -31,8 +34,9 @@ class KnowledgeGraphService:
         self._embed_fn = embed_fn
 
     def retrieve(self, query: str, top_k: int = 5) -> List[dict]:
-        """Wissensgraph-Suche mit PPR-Algorithmus.
+        """Wissensgraph-Suche mit Personalized PageRank.
 
+        Versucht GDS PPR, faellt auf Connection-Count zurueck wenn GDS nicht verfuegbar.
         Rueckgabe-Format identisch mit hipporag_service/retriever.py::hipporag_retrieve().
 
         Args:
@@ -47,23 +51,15 @@ class KnowledgeGraphService:
         # 1. Entity Extraction
         entities = extract_entity_names(query)
 
-        # 2. Graph Lookup + PPR in Neo4j
+        # 2. Graph Lookup — PPR zuerst, Fallback auf Connection-Count
         try:
-            for entity_name in entities[:5]:  # Max 5 Startknoten
-                records = self._graph_repo.find_entities(
-                    name=entity_name, limit=top_k,
-                )
-                for record in records:
-                    results.append({
-                        "entity": record["entity"],
-                        "type": record["type"],
-                        "relations": record["relations"],
-                        "score": min(1.0, record["connections"] / 10.0),
-                        "context": f"Graph-Knoten mit {record['connections']} Verbindungen",
-                        "source": "neo4j",
-                    })
-        except Exception:
-            pass  # Neo4j nicht erreichbar
+            results.extend(self._retrieve_ppr(entities, top_k))
+        except Exception as e:
+            _logger.debug("PPR nicht verfuegbar, Fallback auf Connection-Count: %s", e)
+            try:
+                results.extend(self._retrieve_connection_count(entities, top_k))
+            except Exception:
+                pass  # Neo4j nicht erreichbar
 
         # 3. Qdrant Boost — Vektor-Suche in hipporag_embeddings
         try:
@@ -88,6 +84,75 @@ class KnowledgeGraphService:
                 unique_results.append(r)
 
         return unique_results[:top_k]
+
+    def _retrieve_ppr(self, entities: list, top_k: int) -> list:
+        """PPR-basiertes Retrieval. Wirft Exception bei Fehler (Caller faellt zurueck).
+
+        Args:
+            entities: Extrahierte Entity-Namen.
+            top_k: Maximale Anzahl Ergebnisse.
+
+        Returns:
+            Liste von Dicts im Standard-Format.
+
+        Raises:
+            RuntimeError: Wenn Projection oder Seed-Nodes nicht verfuegbar.
+        """
+        if not self._graph_repo.ensure_graph_projection():
+            raise RuntimeError("Graph-Projection leer oder nicht verfuegbar")
+
+        seed_ids = self._graph_repo.resolve_entity_nodes(entities[:5])
+        if not seed_ids:
+            raise RuntimeError("Keine Seed-Nodes gefunden")
+
+        ppr_results = self._graph_repo.personalized_pagerank(
+            seed_node_ids=seed_ids, top_k=top_k,
+        )
+
+        if not ppr_results:
+            return []
+
+        # PPR-Scores auf 0.0-1.0 normalisieren
+        max_score = max(r["ppr_score"] for r in ppr_results)
+        results = []
+        for r in ppr_results:
+            score = round(r["ppr_score"] / max_score, 4) if max_score > 0 else 0.0
+            results.append({
+                "entity": r["entity"],
+                "type": r["type"],
+                "relations": r["relations"],
+                "score": score,
+                "context": f"PPR-Score: {r['ppr_score']:.6f} (normalisiert: {score})",
+                "source": "neo4j",
+            })
+
+        return results
+
+    def _retrieve_connection_count(self, entities: list, top_k: int) -> list:
+        """Connection-Count Fallback (Original-Verhalten).
+
+        Args:
+            entities: Extrahierte Entity-Namen.
+            top_k: Maximale Anzahl Ergebnisse.
+
+        Returns:
+            Liste von Dicts im Standard-Format.
+        """
+        results = []
+        for entity_name in entities[:5]:
+            records = self._graph_repo.find_entities(
+                name=entity_name, limit=top_k,
+            )
+            for record in records:
+                results.append({
+                    "entity": record["entity"],
+                    "type": record["type"],
+                    "relations": record["relations"],
+                    "score": min(1.0, record["connections"] / 10.0),
+                    "context": f"Graph-Knoten mit {record['connections']} Verbindungen",
+                    "source": "neo4j",
+                })
+        return results
 
     def ingest(self, text: str) -> dict:
         """Pflegt neues Wissen in Neo4j + Qdrant ein.

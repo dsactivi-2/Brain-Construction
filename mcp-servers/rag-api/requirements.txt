@@ -6,4 +6,5 @@ qdrant-client>=1.7
 neo4j>=5.15
 redis>=5.0
 psycopg2-binary>=2.9
+spacy>=3.7
 numpy>=1.24
