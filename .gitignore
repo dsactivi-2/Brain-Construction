@@ -13,6 +13,7 @@ Thumbs.db
 .credentials.json
 *.key
 *.pem
+config/databases.yaml
 
 # IDE
 .vscode/
