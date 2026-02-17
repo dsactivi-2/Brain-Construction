@@ -1,0 +1,18 @@
+# Brain System — Cloud Code Team 02.26
+# Python 3.12+
+
+# Brain Foundation
+pyyaml>=6.0
+sentence-transformers>=2.2
+
+# DB Clients
+qdrant-client>=1.7
+neo4j>=5.15
+redis>=5.0
+psycopg2-binary>=2.9
+
+# MCP Server
+fastmcp>=3.0
+
+# Utilities
+numpy>=1.24

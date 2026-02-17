@@ -1,4 +1,14 @@
 {
+  "mcpServers": {
+    "brain-tools": {
+      "command": "python",
+      "args": ["C:/Users/ds/Desktop/claude-agent-team/mcp-servers/brain-tools/server.py"],
+      "env": {
+        "BRAIN_DIR": "C:/Users/ds/Desktop/claude-agent-team/brain",
+        "CONFIG_DIR": "C:/Users/ds/Desktop/claude-agent-team/config"
+      }
+    }
+  },
   "hooks": {
     "SessionStart": [
       {"type": "command", "command": "bash ~/claude-agent-team/hooks/session-start-startup.sh", "timeout": 15000},
