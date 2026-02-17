@@ -85,15 +85,15 @@ Jeder Punkt muss abgehakt werden bevor das Projekt als fertig gilt.
 - [x] Health-Check Hook definiert — 2026-02-17 22:46
 - [x] Template-Library definiert — 2026-02-17 22:46
 - [x] Kosten-Tracking Hook definiert — 2026-02-17 22:46
-- [ ] Phase 1 gepusht + geprueft
+- [x] Phase 1 gepusht — 2026-02-17 22:47
 
 ## Phase 2: Runbook
-- [ ] Bau-Reihenfolge definiert
-- [ ] Befehle pro Schritt
-- [ ] Abhaengigkeiten zwischen Schritten
-- [ ] Fehlerbehandlung pro Schritt
-- [ ] Rollback-Plan pro Schritt
-- [ ] Phase 2 gepusht + geprueft
+- [x] Bau-Reihenfolge definiert (12 Schritte) — 2026-02-17 22:50
+- [x] Befehle pro Schritt — 2026-02-17 22:50
+- [x] Abhaengigkeiten zwischen Schritten — 2026-02-17 22:50
+- [x] Fehlerbehandlung pro Schritt — 2026-02-17 22:51
+- [x] Rollback-Plan pro Schritt — 2026-02-17 22:51
+- [x] Phase 2 gepusht — 2026-02-17 22:51
 
 ## Phase 3: Setup-Anleitung
 - [ ] Server-Anforderungen (Light/Standard/Heavy)
