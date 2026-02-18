@@ -11,6 +11,8 @@
 #   5. Health-Checks
 #   6. Agent-Profile deployen (merge)
 #   7. Claude Code Hooks einrichten
+#   8. Dashboard installieren (Next.js)
+#   9. Python Requirements + spaCy Modelle
 # ============================================================
 
 set -e
@@ -37,7 +39,7 @@ INSTALL_DIR="$HOME/Desktop/claude-agent-team"
 # ============================================================
 # SCHRITT 1: Prerequisites
 # ============================================================
-step "Schritt 1/7: Prerequisites pruefen"
+step "Schritt 1/9: Prerequisites pruefen"
 
 check_cmd() {
     if command -v "$1" &>/dev/null; then
@@ -103,7 +105,7 @@ fi
 # ============================================================
 # SCHRITT 2: Repository klonen / aktualisieren
 # ============================================================
-step "Schritt 2/7: Repository"
+step "Schritt 2/9: Repository"
 
 if [ -d "$INSTALL_DIR/.git" ]; then
     info "Repository existiert bereits in $INSTALL_DIR"
@@ -128,7 +130,7 @@ fi
 # ============================================================
 # SCHRITT 3: .env konfigurieren
 # ============================================================
-step "Schritt 3/7: Environment (.env)"
+step "Schritt 3/9: Environment (.env)"
 
 if [ -f "$INSTALL_DIR/.env" ]; then
     ok ".env existiert bereits"
@@ -187,7 +189,7 @@ fi
 # ============================================================
 # SCHRITT 4: Docker Services starten
 # ============================================================
-step "Schritt 4/7: Docker Services starten"
+step "Schritt 4/9: Docker Services starten"
 
 cd "$INSTALL_DIR"
 
@@ -208,7 +210,7 @@ ok "Alle 8 Services gestartet"
 # ============================================================
 # SCHRITT 5: Health-Checks
 # ============================================================
-step "Schritt 5/7: Health-Checks"
+step "Schritt 5/9: Health-Checks"
 
 info "Warte 20 Sekunden auf Service-Initialisierung..."
 sleep 20
@@ -256,7 +258,7 @@ fi
 # ============================================================
 # SCHRITT 6: Agent-Profile deployen
 # ============================================================
-step "Schritt 6/7: Agent-Profile mergen + deployen"
+step "Schritt 6/9: Agent-Profile mergen + deployen"
 
 cd "$INSTALL_DIR"
 
@@ -297,7 +299,7 @@ done
 # ============================================================
 # SCHRITT 7: Claude Code Konfiguration (Projekt-Level)
 # ============================================================
-step "Schritt 7/7: Claude Code Konfiguration"
+step "Schritt 7/9: Claude Code Konfiguration"
 
 # --- 7a: PROJEKT-Settings (.claude/settings.json im Repo) ---
 # Das ist die WICHTIGE Datei — MCP Server + Hooks + Permissions
@@ -438,6 +440,72 @@ else
 fi
 
 # ============================================================
+# SCHRITT 8: Dashboard installieren
+# ============================================================
+step "Schritt 8/9: Dashboard installieren"
+
+DASHBOARD_DIR="$INSTALL_DIR/dashboard"
+
+if [ -d "$DASHBOARD_DIR" ] && [ -f "$DASHBOARD_DIR/package.json" ]; then
+    info "Dashboard-Verzeichnis gefunden: $DASHBOARD_DIR"
+
+    # Node.js pruefen
+    if command -v node &>/dev/null; then
+        NODE_VERSION=$(node --version)
+        ok "Node.js: $NODE_VERSION"
+
+        cd "$DASHBOARD_DIR"
+        info "Installiere npm Dependencies..."
+        npm install --loglevel=error 2>&1 | tail -3
+        ok "Dashboard Dependencies installiert"
+
+        info "Baue Dashboard (Production Build)..."
+        npm run build 2>&1 | tail -5
+        ok "Dashboard gebaut"
+
+        cd "$INSTALL_DIR"
+    else
+        warn "Node.js nicht gefunden — Dashboard kann nicht installiert werden"
+        warn "Installiere: brew install node"
+        warn "Danach: cd $DASHBOARD_DIR && npm install && npm run build"
+    fi
+else
+    warn "Dashboard-Verzeichnis nicht gefunden"
+fi
+
+# ============================================================
+# SCHRITT 9: Python Requirements installieren
+# ============================================================
+step "Schritt 9/9: Python Requirements"
+
+cd "$INSTALL_DIR"
+
+# Brain-Tools MCP Server Dependencies
+if [ -f "mcp-servers/brain-tools/requirements.txt" ]; then
+    info "Installiere Brain-Tools Dependencies..."
+    pip3 install -q -r mcp-servers/brain-tools/requirements.txt 2>&1 | tail -3
+    ok "Brain-Tools Requirements installiert"
+fi
+
+# Root Requirements (falls vorhanden)
+if [ -f "requirements.txt" ]; then
+    info "Installiere Root Requirements..."
+    pip3 install -q -r requirements.txt 2>&1 | tail -3
+    ok "Root Requirements installiert"
+fi
+
+# spaCy Modelle (fuer lokale Nutzung ausserhalb Docker)
+if python3 -c "import spacy" 2>/dev/null; then
+    info "Lade spaCy Modelle herunter..."
+    python3 -m spacy download de_core_news_md 2>&1 | tail -2
+    python3 -m spacy download en_core_web_sm 2>&1 | tail -2
+    ok "spaCy Modelle installiert (de + en)"
+else
+    warn "spaCy nicht installiert — Modelle werden uebersprungen"
+    warn "In Docker sind sie bereits enthalten"
+fi
+
+# ============================================================
 # FERTIG
 # ============================================================
 echo ""
@@ -448,19 +516,25 @@ echo ""
 echo "  Installationsort:  $INSTALL_DIR"
 echo "  Branch:            $BRANCH"
 echo ""
-echo "  Docker Services:   docker compose ps"
-echo "  Logs ansehen:      docker compose logs -f <service>"
-echo "  Services stoppen:  docker compose down"
-echo "  Services starten:  docker compose up -d"
+echo -e "${CYAN}  Docker Services:${NC}"
+echo "    docker compose ps              — Status aller Services"
+echo "    docker compose logs -f <name>  — Logs ansehen"
+echo "    docker compose down            — Alles stoppen"
+echo "    docker compose up -d           — Alles starten"
 echo ""
-echo "  Brain-System URLs:"
-echo "    Neo4j Browser:   http://localhost:7474"
+echo -e "${CYAN}  Brain-System URLs:${NC}"
+echo "    Neo4j Browser:    http://localhost:7474"
 echo "    Qdrant Dashboard: http://localhost:6333/dashboard"
-echo "    RAG API:         http://localhost:8100/health"
-echo "    Doc Scanner:     http://localhost:8101/health"
-echo "    HippoRAG:        http://localhost:8102/health"
+echo "    RAG API:          http://localhost:8100/health"
+echo "    Doc Scanner:      http://localhost:8101/health"
+echo "    HippoRAG:         http://localhost:8102/health"
 echo ""
-echo "  Agenten starten (Beispiel):"
+echo -e "${CYAN}  Dashboard:${NC}"
+echo "    cd $DASHBOARD_DIR && npm run dev"
+echo "    http://localhost:3000"
+echo "    (Kanban Board, Agent Monitor, Health, Memory System)"
+echo ""
+echo -e "${CYAN}  Agenten starten:${NC}"
 echo "    cd $INSTALL_DIR"
 echo "    claude --agent agents/berater/CLAUDE.md"
 echo ""
@@ -471,9 +545,15 @@ if ! command -v claude &>/dev/null; then
     echo ""
 fi
 
+if ! command -v node &>/dev/null; then
+    echo -e "${YELLOW}  HINWEIS: Node.js noch installieren (fuer Dashboard):${NC}"
+    echo "    brew install node"
+    echo ""
+fi
+
 echo -e "${YELLOW}  NAECHSTE SCHRITTE:${NC}"
 echo "    1. CLAUDE_API_KEY in .env eintragen"
 echo "    2. Cloud-URIs in .env eintragen (optional, fuer Fallback)"
-echo "    3. Hooks implementieren (17 Hooks fuer Brain-System)"
-echo "    4. Tests ausfuehren"
+echo "    3. Dashboard starten: cd dashboard && npm run dev"
+echo "    4. Agent starten: claude --agent agents/berater/CLAUDE.md"
 echo ""
