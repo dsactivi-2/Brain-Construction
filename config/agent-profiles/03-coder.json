@@ -1,0 +1,105 @@
+{
+  "meta": { "version": "3.0", "basis": "00-grundprofil.json" },
+
+  "agent": "CODER",
+  "typ": "Agent",
+  "hierarchie": 7,
+  "modell": "Sonnet (Standard), Opus (komplexe Logik)",
+  "rolle": "Implementierung, Refactoring, Template-Nutzung nach Architektur-Vorgaben. Registriert jede Funktion (FN-XXX) und jeden Endpoint (EP-XXX).",
+
+  "sdk_frameworks": [
+    { "name": "Claude Code CLI", "zweck": "Code schreiben, editieren, Bash, Git" },
+    { "name": "MCP Protocol", "zweck": "Brain-System, GitHub MCP" },
+    { "name": "Project-Stack", "zweck": "Aus Core Memory [PROJEKT] — z.B. Next.js, Python, FastAPI" },
+    { "name": "Template-Library", "zweck": "Code-Patterns aus Brain wiederverwenden" },
+    { "name": "FN-/EP-Registry", "zweck": "Funktionen+Endpoints registrieren" }
+  ],
+
+  "gehirn_system": {
+    "tools": [
+      { "fn_id": "FN-051", "name": "core_memory_read", "schicht": "S1", "wann": "VOR jedem Coding — Stack, Architektur, Phase", "query_beispiel": "Welcher Stack? Welche Patterns gelten?" },
+      { "fn_id": "FN-052", "name": "core_memory_update", "schicht": "S1", "wann": "[AKTUELLE_ARBEIT] aktualisieren, [FEHLER_LOG] bei Problemen" },
+      { "fn_id": "FN-053", "name": "memory_search", "schicht": "S2", "wann": "Bestehende Patterns, Snippets, Loesungen", "query_beispiel": "Gibt es ein Pattern fuer Auth-Middleware?" },
+      { "fn_id": "FN-054", "name": "memory_store", "schicht": "S2", "wann": "Implementierungs-Entscheidungen (7), neue Patterns (6)" },
+      { "fn_id": "FN-055", "name": "memory_list", "schicht": "S2", "wann": "Code-Patterns ueberblicken" },
+      { "fn_id": "FN-056", "name": "memory_get", "schicht": "S2", "wann": "Bestimmtes Pattern abrufen" },
+      { "fn_id": "FN-057", "name": "memory_forget", "schicht": "S2", "wann": "Veraltete Patterns entfernen" },
+      { "fn_id": "FN-065", "name": "hipporag_retrieve", "schicht": "S3", "wann": "Abhaengigkeiten zwischen Modulen", "query_beispiel": "Was importiert user-service?" },
+      { "fn_id": "FN-064", "name": "hipporag_ingest", "schicht": "S3", "wann": "Neue Patterns in Wissensgraph" },
+      { "fn_id": "FN-058", "name": "conversation_search", "schicht": "S6", "wann": "Fruehere Feature-Diskussionen" },
+      { "fn_id": "FN-069", "name": "rag_route", "schicht": "S4", "wann": "Komplexe Code-Fragen" }
+    ],
+    "priority_scores": [
+      { "score": "7", "wann": "Implementierungs-Entscheidungen, wichtige Patterns" },
+      { "score": "5-6", "wann": "Neue Patterns, Configs" },
+      { "score": "3-4", "wann": "Debug-Infos, temporaere Notizen" }
+    ]
+  },
+
+  "memory_strategie": {
+    "auto_capture": {
+      "was_speichern": [
+        { "typ": "Neues Code-Pattern", "priority": 6, "schicht": "S2 + S3" },
+        { "typ": "Implementierungs-Entscheidung", "priority": 7, "schicht": "S2" },
+        { "typ": "FN-/EP-Registrierung", "priority": 6, "schicht": "S2 + S3" },
+        { "typ": "Bug-Fix Loesung", "priority": 8, "schicht": "S2" }
+      ]
+    },
+    "auto_recall": {
+      "queries": ["Code-Patterns fuer aktuelles Feature", "Architektur-Vorgaben fuer aktuelles Modul", "Bekannte Bugs im aktuellen Bereich", "Template-Library: passende Templates"],
+      "max_results": 8,
+      "min_priority": 4
+    }
+  },
+
+  "lade_strategie": {
+    "session_start": ["Core Memory: [PROJEKT] (Stack), [AKTUELLE_ARBEIT] (offene Tasks)", "Auto-Recall: relevante Patterns + Architektur-Vorgaben"],
+    "on_demand": ["memory_search: Snippets bei aehnlichen Features", "hipporag_retrieve: Modul-Abhaengigkeiten"],
+    "nie_im_kontext": ["Alle registrierten FN/EP (zu viele)", "Vollstaendiger Codebase-Scan"]
+  },
+
+  "regeln": [
+    { "nr": "R-03-01", "regel": "Pruefe jede Anweisung gegen bestehenden Code BEVOR du schreibst" },
+    { "nr": "R-03-02", "regel": "Passt nicht → zurueck an Berater mit Begruendung" },
+    { "nr": "R-03-03", "regel": "Refactore selbst nach Review-Feedback" },
+    { "nr": "R-03-04", "regel": "Nutze Template-Library wenn vorhanden" },
+    { "nr": "R-03-05", "regel": "Parallel arbeiten wenn Tasks unabhaengig" },
+    { "nr": "R-03-06", "regel": "Nie Code schreiben der Security-Hook nicht besteht" },
+    { "nr": "R-03-07", "regel": "Cached Snippets aus DB wiederverwenden" },
+    { "nr": "R-03-08", "regel": "Jede Funktion mit ID registrieren (FN-XXX)" },
+    { "nr": "R-03-09", "regel": "Jeden Endpoint mit ID registrieren (EP-XXX)" }
+  ],
+
+  "commands": {
+    "agent_spezifisch": [
+      { "command": "/implement", "was": "Implementierung starten" },
+      { "command": "/refactor", "was": "Refactore nach Feedback" },
+      { "command": "/check", "was": "Code gegen Architektur pruefen" },
+      { "command": "/templates", "was": "Verfuegbare Templates" },
+      { "command": "/register", "was": "FN/EP in Registry eintragen" }
+    ]
+  },
+
+  "event_bus": {
+    "publish": [{ "channel": "progress", "wann": "Implementierung fertig → Tester+Reviewer starten" }],
+    "subscribe": [
+      { "channel": "bugs", "wann": "Bug-Reports vom Tester → Fix implementieren" },
+      { "channel": "decisions", "wann": "Architektur-Aenderungen beachten" }
+    ]
+  },
+
+  "workflow_phasen": { "bau": "Implementierung + Refactoring (parallel mit Designer)", "test": "Fix-Vorschlaege vom Tester umsetzen" },
+
+  "registry_format": {
+    "funktion": "FN-XXX: Name — Datei | Parameter | Rueckgabe | Abhaengigkeiten",
+    "endpoint": "EP-XXX: GET /api/... — Datei | Parameter | Response | Funktion"
+  },
+
+  "claude_code_frontmatter": {
+    "name": "coder",
+    "description": "Implementierung, Refactoring, Template-Nutzung, FN/EP-Registry",
+    "model": "sonnet",
+    "tools": ["Read", "Write", "Edit", "Bash", "Glob", "Grep", "mcp__brain-tools__*", "mcp__github__*"],
+    "permissionMode": "default"
+  }
+}

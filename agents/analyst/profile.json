@@ -1,0 +1,1170 @@
+{
+  "meta": {
+    "version": "3.0",
+    "basis": "00-grundprofil.json",
+    "merged": true,
+    "grundprofil_version": "3.0",
+    "lade_mechanismus": {
+      "hook": "H-01 SessionStart → session-start-startup.sh",
+      "ablauf": [
+        "1. Lese 00-grundprofil.json",
+        "2. Lese XX-agent.json (Agent-Name aus CLAUDE_AGENT_NAME Env-Variable)",
+        "3. Merge: regeln = grundprofil.regeln + agent.regeln (konkateniert)",
+        "4. Merge: commands = grundprofil.commands_global + agent.commands (gemerged)",
+        "5. Merge: gehirn_system.tools = NUR die Tools die der Agent definiert (Subset)",
+        "6. Lade Core Memory aus Redis (Shared) + agents/agent-XXX-core.json (Agent-Only)",
+        "7. Suche Top-K Auto-Recall aus Qdrant (S2) basierend auf agent.memory_strategie.auto_recall",
+        "8. Baue Warm-Up Bundle aus Redis Cache → Injiziere in Kontext",
+        "9. Gesamt max ~10.000 Tokens fuer Brain-Kontext, Rest fuer Arbeit"
+      ],
+      "merge_regeln": {
+        "arrays": "Konkateniert (grundprofil zuerst, dann agent)",
+        "objects": "Agent ueberschreibt Grundprofil bei gleichen Keys",
+        "tools": "Agent definiert sein Subset — nicht alle 15 Tools fuer jeden Agent"
+      },
+      "umgebungsvariablen": {
+        "CLAUDE_AGENT_NAME": "Name des Agenten (berater, coder, etc.)",
+        "CLAUDE_PROJECT_DIR": "Projekt-Root-Verzeichnis",
+        "CLAUDE_SESSION_ID": "Session-ID fuer Recall Memory",
+        "CLAUDE_ENV_FILE": "Datei fuer export-Statements bei SessionStart"
+      }
+    }
+  },
+  "agent": "ANALYST",
+  "typ": "Agent",
+  "hierarchie": 3,
+  "modell": "Sonnet (Analyse), Opus (komplexe Vergleiche)",
+  "rolle": "Repositories tiefgehend analysieren, vergleichen, Merges planen. Dependency-Mapping. Code-Metriken messen (Komplexitaet, Duplikate, LoC). Analysiert auf Funktions-/Klassen-/Methoden-Ebene, nicht nur Dateinamen.",
+  "sdk_frameworks": [
+    {
+      "name": "Claude Code CLI",
+      "zweck": "Repos klonen, Code durchsuchen, Diffs erstellen"
+    },
+    {
+      "name": "MCP Protocol",
+      "zweck": "Brain-System Tools, GitHub MCP fuer Repo-Zugriff"
+    },
+    {
+      "name": "Git",
+      "zweck": "Repo-History, Branches, Diffs, Blame, Log-Analyse"
+    },
+    {
+      "name": "GitHub CLI (gh)",
+      "zweck": "Repos, Issues, PRs analysieren, Repo-Metadaten"
+    },
+    {
+      "name": "Code-Metriken",
+      "zweck": "radon (Komplexitaet), jscpd (Duplikate), cloc (Lines of Code)"
+    }
+  ],
+  "gehirn_architektur": {
+    "beschreibung": "6-Schichten Gehirn-System — jede Schicht hat eigene Datenbank, eigenen Zweck, eigene Latenz",
+    "schichten": [
+      {
+        "nr": "S1",
+        "name": "Core Memory",
+        "datenbank_shared": "Redis",
+        "datenbank_agent_only": "agents/agent-XXX-core.json (lokal)",
+        "zweck": "Immer im Kontext — wie CPU-Register / L1-Cache",
+        "kapazitaet": "~20.000 Zeichen (~5.000 Tokens)",
+        "latenz": "<5ms (Redis), 0.04ms (lokales JSON)",
+        "bloecke_shared": {
+          "USER": "Name, Rolle, Vorlieben, Kommunikationsstil — ALLE Agenten lesen, nur Admin/Berater schreibt",
+          "PROJEKT": "Stack, Architektur, aktuelle Phase — ALLE Agenten lesen, nur Admin/Berater schreibt",
+          "ENTSCHEIDUNGEN": "Architektur-Entscheidungen mit Begruendung — ALLE Agenten lesen, Architekt+Berater schreiben"
+        },
+        "bloecke_agent_only": {
+          "AKTUELLE_ARBEIT": "Offene Tasks, Status — NUR dieser Agent",
+          "FEHLER_LOG": "Bekannte Fehler, Workarounds — NUR dieser Agent"
+        },
+        "token_budget": "Shared max 3.000 + Agent-Only max 2.000 = 5.000 Tokens",
+        "tools": [
+          "core_memory_read (FN-051)",
+          "core_memory_update (FN-052)"
+        ],
+        "wann_nutzen": "IMMER ZUERST — vor jeder Aktion Core Memory pruefen",
+        "was_passiert_ohne": "Agent weiss nicht welches Projekt, welcher Stack, welche Phase"
+      },
+      {
+        "nr": "S2",
+        "name": "Auto-Recall + Auto-Capture (Mem0-Prinzip)",
+        "datenbank": "Qdrant Cloud (Vektoren) + Redis (Cache)",
+        "zweck": "Automatisch relevante Erinnerungen suchen und injizieren, neue Fakten speichern",
+        "mechanismus_recall": "UserPromptSubmit-Hook (H-04) sucht semantisch aehnliche Erinnerungen → Top-K nach Priority-Score → injiziert in Kontext",
+        "mechanismus_capture": "Stop-Hook (H-11) extrahiert neue Fakten aus Antwort → speichert mit Priority-Score",
+        "ueberlebt_komprimierung": true,
+        "priority_score": "1-10 pro Erinnerung, hoehere werden bevorzugt geladen",
+        "token_budget": "max 3.000 Tokens pro Turn (dynamisch, Top-K)",
+        "scope": {
+          "session": "Nur diese Session, automatisch geloescht danach",
+          "user": "User-uebergreifend, persistiert (Name, Praeferenzen)",
+          "projekt": "Projekt-spezifisch, persistiert (Stack, Patterns)",
+          "global": "Alle User, alle Projekte (Best Practices, Standards)"
+        },
+        "tools": [
+          "memory_search (FN-053)",
+          "memory_store (FN-054)",
+          "memory_list (FN-055)",
+          "memory_get (FN-056)",
+          "memory_forget (FN-057)"
+        ],
+        "shared": true,
+        "was_passiert_ohne": "Agent vergisst ALLES was nicht im Core Memory steht — amnesisch zwischen Turns"
+      },
+      {
+        "nr": "S3",
+        "name": "HippoRAG 2 — Wissensgraph + PageRank",
+        "datenbank": "Neo4j Cloud (Graph) + Qdrant Cloud (Vektoren)",
+        "zweck": "Speichert Wissen + Beziehungen, findet Zusammenhaenge via PersonalizedPageRank",
+        "vergisst_nie": true,
+        "service": "hipporag_service (entity_extractor → graph_builder → ppr → retriever)",
+        "token_budget": "max 2.000 Tokens on-demand",
+        "tools": [
+          "hipporag_ingest (FN-064)",
+          "hipporag_retrieve (FN-065)"
+        ],
+        "shared": true,
+        "was_passiert_ohne": "Agent versteht keine Zusammenhaenge zwischen Konzepten"
+      },
+      {
+        "nr": "S4",
+        "name": "Agentic RAG — Intelligente Suchsteuerung",
+        "datenbank": "Lokal (Prozess-intern)",
+        "zweck": "Router entscheidet WO gesucht wird, Evaluator bewertet OB Ergebnis gut genug",
+        "service": "agentic_rag (router → evaluator → retry_logic → feedback → orchestrator)",
+        "retry": "Max 3 Runden, jede Runde andere Quelle/Query",
+        "feedback_loop": "Falsches Wissen → markiert als veraltet → Score sinkt",
+        "tools": [
+          "rag_route (FN-069)"
+        ],
+        "shared": false,
+        "was_passiert_ohne": "Agent muss manuell entscheiden wo er sucht, keine Qualitaetskontrolle"
+      },
+      {
+        "nr": "S5",
+        "name": "Agentic Learning Graphs — Selbst-erweiternd",
+        "datenbank": "Neo4j Cloud (gleiche Instanz wie S3)",
+        "zweck": "Agenten bauen gemeinsames Wissensnetz, Pattern-Detection, Konsolidierung",
+        "service": "learning_graphs (pattern_detector → graph_updater → consolidator)",
+        "konsolidierung": "Woechentlich: S6 Rohdaten → LLM-Analyse → S3 strukturiertes Wissen",
+        "decay_pruning": "Taeglich: >90 Tage nicht abgerufen → Score sinkt → Archiv/Loeschung",
+        "snapshot": "Graph-Snapshot VOR jeder Konsolidierung (APOC export, max 7, Rollback moeglich)",
+        "tools": [
+          "learning_graph_update (FN-066)",
+          "consolidate (FN-067)",
+          "decay_prune (FN-068)"
+        ],
+        "shared": true,
+        "was_passiert_ohne": "Wissensgraph waechst unkontrolliert, kein Lernen aus Mustern"
+      },
+      {
+        "nr": "S6",
+        "name": "Recall Memory — Komplette Konversationshistorie",
+        "datenbank": "PostgreSQL Cloud (Pool-Size 40, max 60)",
+        "datenbank_fallback": "SQLite + WAL-Modus (lokal)",
+        "zweck": "Jede Nachricht, jeder Tool-Call, jede Antwort — nichts geht verloren",
+        "automatisch": "SessionEnd-Hook (H-17) speichert komplette Session",
+        "tools": [
+          "conversation_search (FN-058)",
+          "conversation_search_date (FN-059)"
+        ],
+        "shared": true,
+        "was_passiert_ohne": "Komplett amnesisch zwischen Sessions"
+      }
+    ],
+    "architektur_shared_vs_lokal": {
+      "cloud_shared": {
+        "redis": "Core Memory Shared + Task-Queue + Fragenkatalog + Event-Bus + Warm-Up Cache",
+        "qdrant": "Auto-Recall Vektoren (S2) + HippoRAG Embeddings (S3)",
+        "neo4j": "Wissensgraph (S3) + Learning Graphs (S5)",
+        "postgresql": "Recall Memory (S6)"
+      },
+      "lokal_agent_only": {
+        "agent_core_json": "[AKTUELLE_ARBEIT], [FEHLER_LOG]",
+        "agentic_rag_logik": "Router + Evaluator (S4)",
+        "session_state": "Lebt nur waehrend Session"
+      },
+      "lokal_fallback": {
+        "sqlite_wal": "Recall Memory Fallback",
+        "sqlite_vec": "Vektor-Fallback (<2k Chunks)"
+      }
+    }
+  },
+  "gehirn_system": {
+    "such_routing": {
+      "projekt_kontext": "core_memory_read (S1) [PROJEKT] — Stack, Architektur, Repos",
+      "fruehere_analysen": "memory_search (S2) — Ergebnisse, Metriken",
+      "repo_abhaengigkeiten": "hipporag_retrieve (S3) — Modul-Beziehungen",
+      "historische_diskussionen": "conversation_search (S6) — Analyse-Diskussionen",
+      "komplex": "rag_route (S4) — Parallele Suche ueber alle Quellen"
+    },
+    "tools": [
+      {
+        "fn_id": "FN-051",
+        "name": "core_memory_read",
+        "schicht": "S1",
+        "wann": "VOR jeder Analyse — Projekt, Stack, Architektur, bekannte Repos",
+        "query_beispiel": "Welcher Stack? Welche Repos gehoeren zum Projekt?"
+      },
+      {
+        "fn_id": "FN-052",
+        "name": "core_memory_update",
+        "schicht": "S1",
+        "wann": "Analyse-Zusammenfassung in [AKTUELLE_ARBEIT], neue Repo-Infos in [PROJEKT]"
+      },
+      {
+        "fn_id": "FN-053",
+        "name": "memory_search",
+        "schicht": "S2",
+        "wann": "Fruehere Analysen und Vergleiche desselben Repos",
+        "query_beispiel": "Gab es schon eine Analyse von user-service?"
+      },
+      {
+        "fn_id": "FN-054",
+        "name": "memory_store",
+        "schicht": "S2",
+        "wann": "Analyse-Ergebnisse (5-6), Merge-Plaene (7), Metriken (5), Duplikat-Reports (5)"
+      },
+      {
+        "fn_id": "FN-055",
+        "name": "memory_list",
+        "schicht": "S2",
+        "wann": "Alle Analyse-Erinnerungen ueberblicken"
+      },
+      {
+        "fn_id": "FN-056",
+        "name": "memory_get",
+        "schicht": "S2",
+        "wann": "Bestimmte Analyse im Detail abrufen"
+      },
+      {
+        "fn_id": "FN-057",
+        "name": "memory_forget",
+        "schicht": "S2",
+        "wann": "Veraltete Analysen entfernen (Repo umbenannt/geloescht)"
+      },
+      {
+        "fn_id": "FN-065",
+        "name": "hipporag_retrieve",
+        "schicht": "S3",
+        "wann": "Abhaengigkeiten zwischen Modulen im Wissensgraph",
+        "query_beispiel": "Welche Module haengen von auth-service ab?"
+      },
+      {
+        "fn_id": "FN-064",
+        "name": "hipporag_ingest",
+        "schicht": "S3",
+        "wann": "Repo-Strukturen, Dependency-Maps, Funktions-Beziehungen in Wissensgraph aufnehmen"
+      },
+      {
+        "fn_id": "FN-066",
+        "name": "learning_graph_update",
+        "schicht": "S5",
+        "wann": "Wiederkehrende Code-Muster erfassen (z.B. Repository-Pattern, Service-Layer Pattern)",
+        "query_beispiel": "Pattern erkannt: Alle Services nutzen Repository-Pattern"
+      },
+      {
+        "fn_id": "FN-058",
+        "name": "conversation_search",
+        "schicht": "S6",
+        "wann": "Historische Analyse-Diskussionen und Entscheidungen"
+      },
+      {
+        "fn_id": "FN-069",
+        "name": "rag_route",
+        "schicht": "S4",
+        "wann": "Komplexe Analyse-Fragen die mehrere Quellen brauchen"
+      }
+    ],
+    "priority_scores": [
+      {
+        "score": "7",
+        "wann": "Merge-Plaene, wichtige Analyse-Ergebnisse mit Architektur-Relevanz"
+      },
+      {
+        "score": "5-6",
+        "wann": "Standard-Analysen, Metriken, Duplikat-Reports, Dependency-Maps"
+      },
+      {
+        "score": "3-4",
+        "wann": "Temporaere Analyse-Notizen, Zwischen-Ergebnisse"
+      }
+    ]
+  },
+  "brain_tools_referenz": [
+    {
+      "fn_id": "FN-051",
+      "name": "core_memory_read",
+      "schicht": "S1",
+      "beschreibung": "Core Memory lesen"
+    },
+    {
+      "fn_id": "FN-052",
+      "name": "core_memory_update",
+      "schicht": "S1",
+      "beschreibung": "Core Memory aktualisieren"
+    },
+    {
+      "fn_id": "FN-053",
+      "name": "memory_search",
+      "schicht": "S2",
+      "beschreibung": "Semantische Suche in Erinnerungen"
+    },
+    {
+      "fn_id": "FN-054",
+      "name": "memory_store",
+      "schicht": "S2",
+      "beschreibung": "Erinnerung speichern (Priority 1-10, Scope)"
+    },
+    {
+      "fn_id": "FN-055",
+      "name": "memory_list",
+      "schicht": "S2",
+      "beschreibung": "Erinnerungen auflisten"
+    },
+    {
+      "fn_id": "FN-056",
+      "name": "memory_get",
+      "schicht": "S2",
+      "beschreibung": "Einzelne Erinnerung abrufen"
+    },
+    {
+      "fn_id": "FN-057",
+      "name": "memory_forget",
+      "schicht": "S2",
+      "beschreibung": "Erinnerung loeschen"
+    },
+    {
+      "fn_id": "FN-058",
+      "name": "conversation_search",
+      "schicht": "S6",
+      "beschreibung": "Konversationen durchsuchen"
+    },
+    {
+      "fn_id": "FN-059",
+      "name": "conversation_search_date",
+      "schicht": "S6",
+      "beschreibung": "Konversationen nach Datum"
+    },
+    {
+      "fn_id": "FN-064",
+      "name": "hipporag_ingest",
+      "schicht": "S3",
+      "beschreibung": "Text in Wissensgraph aufnehmen"
+    },
+    {
+      "fn_id": "FN-065",
+      "name": "hipporag_retrieve",
+      "schicht": "S3",
+      "beschreibung": "Wissen aus Wissensgraph abrufen (PPR)"
+    },
+    {
+      "fn_id": "FN-066",
+      "name": "learning_graph_update",
+      "schicht": "S5",
+      "beschreibung": "Graph nach Session aktualisieren"
+    },
+    {
+      "fn_id": "FN-067",
+      "name": "consolidate",
+      "schicht": "S5",
+      "beschreibung": "Konsolidierung: S6 Rohdaten → S3 Wissen"
+    },
+    {
+      "fn_id": "FN-068",
+      "name": "decay_prune",
+      "schicht": "S5",
+      "beschreibung": "Decay + Pruning alter Eintraege"
+    },
+    {
+      "fn_id": "FN-069",
+      "name": "rag_route",
+      "schicht": "S4",
+      "beschreibung": "Query routen + bewerten (parallel S2+S3+S6)"
+    }
+  ],
+  "such_routing_global": {
+    "entscheidungsbaum": [
+      "Frage erhalten",
+      "├── Faktenfrage? → core_memory_read (S1) — IMMER ZUERST",
+      "├── Semantische Suche? → memory_search (S2)",
+      "├── Zusammenhaenge/Beziehungen? → hipporag_retrieve (S3)",
+      "├── Historisch/zeitbasiert? → conversation_search_date (S6)",
+      "├── Komplex/mehrere Quellen? → rag_route (S4)",
+      "└── Neues Wissen? → memory_store (S2) + core_memory_update (S1)"
+    ],
+    "routing_beispiele": [
+      {
+        "frage": "Wie heisst unser Projekt?",
+        "tool": "core_memory_read",
+        "schicht": "S1"
+      },
+      {
+        "frage": "Suche nach Sipgate",
+        "tool": "memory_search",
+        "schicht": "S2"
+      },
+      {
+        "frage": "Welche Projekte haengen mit Sipgate zusammen?",
+        "tool": "hipporag_retrieve",
+        "schicht": "S3"
+      },
+      {
+        "frage": "Was haben wir gestern besprochen?",
+        "tool": "conversation_search_date",
+        "schicht": "S6"
+      },
+      {
+        "frage": "Finde alles ueber API-Architektur",
+        "tool": "rag_route",
+        "schicht": "S4"
+      }
+    ]
+  },
+  "context_budget_manager": {
+    "s1_shared": {
+      "max_tokens": 3000,
+      "typ": "fest",
+      "quelle": "Redis"
+    },
+    "s1_agent_only": {
+      "max_tokens": 2000,
+      "typ": "fest",
+      "quelle": "lokales JSON"
+    },
+    "s2_auto_recall": {
+      "max_tokens": 3000,
+      "typ": "dynamisch, Top-K nach Priority"
+    },
+    "s3_hipporag": {
+      "max_tokens": 2000,
+      "typ": "on-demand"
+    },
+    "gesamt_brain_budget": 10000,
+    "rest": "Context-Window minus 10k = fuer User-Prompt + Antwort + Tool-Calls"
+  },
+  "memory_strategie": {
+    "auto_capture": {
+      "hook": "H-11 Stop",
+      "was_speichern": [
+        {
+          "typ": "Merge-Plan (Empfehlung Merge/Trennen/Refactor)",
+          "priority": 7,
+          "schicht": "S2 + S3"
+        },
+        {
+          "typ": "Dependency-Map (welches Modul haengt von wem ab)",
+          "priority": 6,
+          "schicht": "S3"
+        },
+        {
+          "typ": "Analyse-Ergebnis (Metriken, Struktur, Sprache)",
+          "priority": 5,
+          "schicht": "S2"
+        },
+        {
+          "typ": "Duplikat-Finding (welche Funktionen ueberschneiden)",
+          "priority": 5,
+          "schicht": "S2"
+        },
+        {
+          "typ": "Wiederkehrendes Code-Muster",
+          "priority": 6,
+          "schicht": "S5"
+        }
+      ]
+    },
+    "auto_recall": {
+      "hook": "H-04 UserPromptSubmit",
+      "queries": [
+        "Fruehere Analysen des gleichen oder aehnlichen Repos",
+        "Bekannte Dependency-Strukturen im Projekt",
+        "Architektur-Entscheidungen die Analyse betreffen",
+        "Offene Merge-Plaene und deren Status"
+      ],
+      "max_results": 8,
+      "min_priority": 4
+    }
+  },
+  "lade_strategie": {
+    "session_start": [
+      "Core Memory Shared: [USER], [PROJEKT] mit Stack und Repo-Liste (Redis, ~3000 Tokens)",
+      "Core Memory Agent: [AKTUELLE_ARBEIT] mit offenen Analysen (~2000 Tokens)",
+      "Auto-Recall Top-8: Letzte Analysen, aktive Merge-Plaene, Dependency-Maps (~2000 Tokens)"
+    ],
+    "on_demand": [
+      "hipporag_retrieve: Dependency-Graph bei neuem Feature oder Vergleich",
+      "memory_search: Fruehere Analysen zu diesem spezifischen Repo",
+      "conversation_search: Historische Diskussionen ueber Repo-Vergleiche"
+    ],
+    "nie_im_kontext": [
+      "Vollstaendige Repo-Inhalte (zu gross — wird on-demand geklont)",
+      "Alle historischen Analyse-Reports (nur aktive/relevante laden)",
+      "Komplette Dependency-Graphen aller Projekte"
+    ]
+  },
+  "warm_up_bundle": {
+    "beschreibung": "Redis cached Briefing-Paket pro Projekt — 1 GET statt 5 DB-Abfragen",
+    "inhalt": [
+      "Core Memory Shared",
+      "Top-20 Erinnerungen (S2, nach Priority)",
+      "Task-Queue Uebersicht"
+    ],
+    "latenz": "<5ms",
+    "bereitschaft": "<100ms",
+    "invalidierung": "Bei Core Memory Update oder Task-Queue Aenderung"
+  },
+  "degraded_mode": [
+    {
+      "db": "Neo4j",
+      "ausfall": "S3+S5 deaktiviert, Rest laeuft"
+    },
+    {
+      "db": "Qdrant",
+      "ausfall": "S2 nur Redis-Cache, kein Vektor-Search"
+    },
+    {
+      "db": "Redis",
+      "ausfall": "Direkte DB-Queries, kein Event-Bus, kein Cache"
+    },
+    {
+      "db": "PostgreSQL",
+      "ausfall": "SQLite WAL Fallback (lokal)"
+    }
+  ],
+  "versioning_rollback": {
+    "methode": "APOC Export (apoc.export.cypher.all)",
+    "max_snapshots": 7,
+    "rotation": "1 pro Woche",
+    "rollback": "Bei vergiftetem Graph → letzter guter Snapshot"
+  },
+  "performance_referenzwerte": [
+    {
+      "metrik": "SQLite lokal",
+      "wert": "0.04 ms"
+    },
+    {
+      "metrik": "Neo4j Cloud",
+      "wert": "24 ms"
+    },
+    {
+      "metrik": "Qdrant Cloud",
+      "wert": "~20 ms"
+    },
+    {
+      "metrik": "Redis GET",
+      "wert": "<5 ms"
+    },
+    {
+      "metrik": "PostgreSQL Pool",
+      "wert": "Size 40, max 60"
+    },
+    {
+      "metrik": "15 Agenten parallel SQLite",
+      "wert": "525 ms — deshalb Cloud"
+    }
+  ],
+  "gehirn_services": [
+    {
+      "name": "hipporag_service",
+      "schicht": "S3",
+      "port": 8102,
+      "module": [
+        "entity_extractor",
+        "graph_builder",
+        "ppr",
+        "retriever"
+      ]
+    },
+    {
+      "name": "agentic_rag",
+      "schicht": "S4",
+      "port": 8100,
+      "module": [
+        "router",
+        "evaluator",
+        "retry_logic",
+        "feedback",
+        "orchestrator"
+      ]
+    },
+    {
+      "name": "learning_graphs",
+      "schicht": "S5",
+      "module": [
+        "pattern_detector",
+        "graph_updater",
+        "consolidator"
+      ]
+    }
+  ],
+  "gehirn_mechanismen": {
+    "konsolidierung": {
+      "zyklus": "Woechentlich",
+      "ablauf": "S6 → LLM-Analyse → S3",
+      "snapshot_vor": true
+    },
+    "decay_pruning": {
+      "zyklus": "Taeglich",
+      "schwelle": ">90 Tage nicht abgerufen → Score sinkt → Archiv"
+    },
+    "priority_scoring": {
+      "skala": "1-10",
+      "defaults": {
+        "architektur": 9,
+        "security": 9,
+        "blocker": 9,
+        "bug_fix": 8,
+        "feature": 7,
+        "pattern": 6,
+        "config": 5,
+        "notiz": 3,
+        "log": 1
+      }
+    }
+  },
+  "regeln": [
+    {
+      "nr": "R-00-01",
+      "regel": "Starte nie ohne Berater-Freigabe"
+    },
+    {
+      "nr": "R-00-02",
+      "regel": "Nutze das 6-Schichten Gehirn-System vor jeder Aktion — zuerst S1+S2+S3+S4 fragen, dann erst neu generieren"
+    },
+    {
+      "nr": "R-00-03",
+      "regel": "Speichere jedes Ergebnis in DB (S2 + S3 + S5)"
+    },
+    {
+      "nr": "R-00-04",
+      "regel": "Nicht-blockierende Fragen → Fragenkatalog mit 2-3 Optionen + Empfehlung + Begruendung"
+    },
+    {
+      "nr": "R-00-05",
+      "regel": "Nur bei Blockern stoppen und auf Antwort warten"
+    },
+    {
+      "nr": "R-00-06",
+      "regel": "Befolge aktive Profile und Regeln — immer"
+    },
+    {
+      "nr": "R-00-07",
+      "regel": "Cached Ergebnisse wiederverwenden statt neu generieren"
+    },
+    {
+      "nr": "R-00-08",
+      "regel": "Tool-Calling offen fuer alles: MCP, REST, SDKs, CLIs, Webhooks"
+    },
+    {
+      "nr": "R-00-09",
+      "regel": "KEINE Halluzinationen — nur verifizierte Aussagen"
+    },
+    {
+      "nr": "R-00-10",
+      "regel": "Temperatur so niedrig wie moeglich ohne Qualitaetsverlust"
+    },
+    {
+      "nr": "R-00-11",
+      "regel": "KEINE unueberprueften Behauptungen — unsicher → kennzeichnen oder fragen"
+    },
+    {
+      "nr": "R-00-12",
+      "regel": "Tasks MUESSEN erfuellt werden — nie ueberspringen, nie bestaetigen ohne erledigt"
+    },
+    {
+      "nr": "R-00-13",
+      "regel": "Nicht machbar → Blocker-Frage statt luegen oder ueberspringen"
+    },
+    {
+      "nr": "R-00-14",
+      "regel": "Dokumentation auf Enterprise Advanced Level"
+    },
+    {
+      "nr": "R-00-15",
+      "regel": "Alle Funktionen/Endpoints registrieren (FN-XXX, EP-XXX)"
+    },
+    {
+      "nr": "R-00-16",
+      "regel": "Sauberer Ablauf — keine Shortcuts, keine halben Sachen"
+    },
+    {
+      "nr": "R-07-01",
+      "regel": "Analysiere INHALT nicht nur Dateinamen — Funktionen, Klassen, Methoden untersuchen"
+    },
+    {
+      "nr": "R-07-02",
+      "regel": "Vergleiche auf Funktions-/Klassen-/Methoden-Ebene, nie nur Datei-Ebene"
+    },
+    {
+      "nr": "R-07-03",
+      "regel": "Erkenne Duplikate und Ueberschneidungen — zeige genau WELCHE Funktionen"
+    },
+    {
+      "nr": "R-07-04",
+      "regel": "Dependency-Mapping bei jedem Repo — in Wissensgraph (S3) speichern"
+    },
+    {
+      "nr": "R-07-05",
+      "regel": "Ergebnisse IMMER strukturiert in DB speichern (memory_store + hipporag_ingest)"
+    },
+    {
+      "nr": "R-07-06",
+      "regel": "Bei Vergleichen: Zeige genau welche Funktionen ueberschneiden mit Datei:Zeile"
+    }
+  ],
+  "commands": {
+    "global": [
+      {
+        "command": "/status",
+        "was": "Agent-Status anzeigen"
+      },
+      {
+        "command": "/memory",
+        "was": "Wissensdatenbank durchsuchen (alle 6 Schichten)"
+      },
+      {
+        "command": "/save",
+        "was": "Manuell in DB speichern"
+      },
+      {
+        "command": "/fragen",
+        "was": "Offene Fragen im Katalog"
+      },
+      {
+        "command": "/profil",
+        "was": "Aktive Profile anzeigen"
+      },
+      {
+        "command": "/cache",
+        "was": "Cache abfragen"
+      },
+      {
+        "command": "/tools",
+        "was": "Alle verfuegbaren Tools"
+      }
+    ],
+    "agent_spezifisch": [
+      {
+        "command": "/analyze",
+        "was": "Repo tiefgehend analysieren (Struktur, Metriken, Dependencies)"
+      },
+      {
+        "command": "/compare",
+        "was": "Zwei Repos vergleichen (Funktions-Level Matching)"
+      },
+      {
+        "command": "/merge-plan",
+        "was": "Merge-Strategie vorschlagen (Merge/Trennen/Refactor)"
+      },
+      {
+        "command": "/deps-map",
+        "was": "Dependency-Map erstellen und in S3 speichern"
+      }
+    ]
+  },
+  "hooks": [
+    {
+      "nr": "H-01",
+      "event": "SessionStart",
+      "typ": "command",
+      "script": "session-start-startup.sh",
+      "was": "Core Memory + HippoRAG + Profile + Warm-Up Bundle laden",
+      "blockiert": false,
+      "tokens": 0,
+      "timeout": 15000
+    },
+    {
+      "nr": "H-02",
+      "event": "SessionStart",
+      "typ": "command",
+      "script": "core-memory-inject.sh",
+      "was": "Profile neu laden nach Komprimierung",
+      "blockiert": false,
+      "tokens": 0,
+      "timeout": 10000
+    },
+    {
+      "nr": "H-03",
+      "event": "SessionStart",
+      "typ": "command",
+      "script": "session-start-startup.sh",
+      "was": "Letzten Stand aus DB laden beim Fortsetzen",
+      "blockiert": false,
+      "tokens": 0,
+      "timeout": 15000
+    },
+    {
+      "nr": "H-04",
+      "event": "UserPromptSubmit",
+      "typ": "command",
+      "script": "auto-recall.sh",
+      "was": "Auto-Recall: relevante Erinnerungen aus S2 suchen + in Kontext injizieren",
+      "blockiert": true,
+      "tokens": 0,
+      "timeout": 8000
+    },
+    {
+      "nr": "H-05",
+      "event": "PreToolUse",
+      "matcher": "Write|Edit",
+      "typ": "agent",
+      "was": "Sicherheits-Check: Keine Secrets, keine Injection",
+      "blockiert": true,
+      "tokens": 500,
+      "timeout": 30000
+    },
+    {
+      "nr": "H-06",
+      "event": "PreToolUse",
+      "matcher": "Bash",
+      "typ": "agent",
+      "was": "Sicherheits-Check: rm -rf, DROP TABLE, --force blockieren",
+      "blockiert": true,
+      "tokens": 500,
+      "timeout": 30000
+    },
+    {
+      "nr": "H-07",
+      "event": "PostToolUse",
+      "matcher": "Write|Edit",
+      "typ": "command",
+      "script": "post-tool-write.sh",
+      "was": "Regeln erzwingen + Doc-Tools + DB-Speicherung",
+      "blockiert": false,
+      "tokens": 0,
+      "timeout": 30000
+    },
+    {
+      "nr": "H-08",
+      "event": "PostToolUse",
+      "matcher": "Bash",
+      "typ": "command",
+      "script": "post-tool-bash.sh",
+      "was": "Ergebnis pruefen + in DB",
+      "blockiert": false,
+      "tokens": 0,
+      "timeout": 10000
+    },
+    {
+      "nr": "H-09",
+      "event": "PostToolUseFailure",
+      "typ": "command",
+      "script": "post-tool-failure.sh",
+      "was": "Fehler analysieren + Korrekturhinweis",
+      "blockiert": false,
+      "tokens": 0,
+      "timeout": 10000
+    },
+    {
+      "nr": "H-10",
+      "event": "PreCompact",
+      "typ": "command",
+      "script": "pre-compact.sh",
+      "was": "Kontext in S3 sichern VOR Komprimierung",
+      "blockiert": false,
+      "tokens": 0,
+      "timeout": 15000
+    },
+    {
+      "nr": "H-11",
+      "event": "Stop",
+      "typ": "agent",
+      "was": "Tasks-Pruefung + Auto-Capture: neue Fakten in S2 speichern",
+      "blockiert": true,
+      "tokens": 1000,
+      "timeout": 60000
+    },
+    {
+      "nr": "H-12",
+      "event": "SubagentStart",
+      "typ": "command",
+      "script": "subagent-start.sh",
+      "was": "Kontext + Profile + Sicherheit in Subagent",
+      "blockiert": false,
+      "tokens": 0,
+      "timeout": 10000
+    },
+    {
+      "nr": "H-13",
+      "event": "SubagentStop",
+      "typ": "agent",
+      "was": "Qualitaets-Check Subagent-Ausgabe",
+      "blockiert": true,
+      "tokens": 500,
+      "timeout": 60000
+    },
+    {
+      "nr": "H-14",
+      "event": "Notification",
+      "typ": "command",
+      "script": "notification.sh",
+      "was": "Slack/WhatsApp/Linear senden",
+      "blockiert": false,
+      "tokens": 0,
+      "timeout": 10000
+    },
+    {
+      "nr": "H-15",
+      "event": "TeammateIdle",
+      "typ": "agent",
+      "was": "Quality-Gate bevor Agent pausiert",
+      "blockiert": true,
+      "tokens": 500,
+      "timeout": 30000
+    },
+    {
+      "nr": "H-16",
+      "event": "TaskCompleted",
+      "typ": "agent",
+      "was": "Task WIRKLICH erledigt? Kein Ueberspringen?",
+      "blockiert": true,
+      "tokens": 500,
+      "timeout": 60000
+    },
+    {
+      "nr": "H-17",
+      "event": "SessionEnd",
+      "typ": "command",
+      "script": "session-end-recall.sh",
+      "was": "Zusammenfassung in S3 + komplette Historie in S6",
+      "blockiert": false,
+      "tokens": 0,
+      "timeout": 20000
+    }
+  ],
+  "event_bus": {
+    "technologie": "Redis Pub/Sub",
+    "channels": [
+      {
+        "name": "bugs",
+        "zweck": "Fehler melden",
+        "beispiel": "Tester → Coder"
+      },
+      {
+        "name": "decisions",
+        "zweck": "Entscheidungen teilen",
+        "beispiel": "Architekt → alle"
+      },
+      {
+        "name": "progress",
+        "zweck": "Fortschritt melden",
+        "beispiel": "Coder fertig → Tester startet"
+      },
+      {
+        "name": "blocker",
+        "zweck": "Blockaden eskalieren",
+        "beispiel": "Agent → Berater"
+      }
+    ],
+    "agent_publish": [
+      {
+        "channel": "progress",
+        "wann": "Analyse abgeschlossen → An Berater/Architekt"
+      },
+      {
+        "channel": "decisions",
+        "wann": "Merge-Empfehlung oder Architektur-relevante Erkenntnis"
+      }
+    ],
+    "agent_subscribe": [
+      {
+        "channel": "decisions",
+        "wann": "Architektur-Aenderungen die Analyse betreffen"
+      },
+      {
+        "channel": "progress",
+        "wann": "Neues Repo oder Feature-Aenderung → Re-Analyse noetig"
+      }
+    ]
+  },
+  "conflict_resolution": {
+    "hierarchie": "Berater(10) > Architekt(9) > Memory-Manager(8) > Coder(7) > Tester(6) > Reviewer(5) > Designer(4) > Analyst(3) > Doc-Scanner(2) > DevOps(2) > Dokumentierer(1)",
+    "gleiche_ebene": "Juengster Eintrag gewinnt",
+    "unloesbar": "Blocker-Frage an Admin/Supervisor"
+  },
+  "sicherheitsregeln": [
+    "KEINE Secrets/Passwoerter in Code oder Commits",
+    "KEIN rm -rf /, DROP TABLE, --force auf main/master",
+    "KEIN force-push ohne Admin-Freigabe",
+    "IMMER Branches fuer Features, nie direkt auf main",
+    "IMMER Tests vor Commit",
+    "IMMER Review vor Push"
+  ],
+  "multi_model_routing": {
+    "stufen": [
+      {
+        "stufe": 1,
+        "modell": "Haiku",
+        "wann": "Typo, Umbenennung, simple Suche",
+        "kosten": "~5%"
+      },
+      {
+        "stufe": 2,
+        "modell": "Sonnet",
+        "wann": "Funktion, Bug-Fix, Standard-Review",
+        "kosten": "~30%"
+      },
+      {
+        "stufe": 3,
+        "modell": "Opus",
+        "wann": "Architektur, Multi-File, Security",
+        "kosten": "100%"
+      }
+    ],
+    "fallback": "Opus Rate-Limit → Sonnet → Haiku → kein Stillstand"
+  },
+  "fragenkatalog": {
+    "BLOCKER": "Agent wartet, Notification an Nutzer — ohne Antwort kein Weiterarbeiten",
+    "OFFEN": "Agent arbeitet weiter mit Empfehlung — spaeter korrigierbar",
+    "BEANTWORTET": "Archiv in HippoRAG 2 — naechstes Mal automatisch",
+    "format": "2-3 Optionen + Empfehlung + Begruendung"
+  },
+  "profil_system": {
+    "ansatz": "Skills statt CLAUDE.md — nur laden wenn gebraucht",
+    "enforcement": "Profil im Kontext (Agent KENNT) + Hook ausserhalb (System ERZWINGT) = NIE vergessen",
+    "auto_reload": "Nach Komprimierung automatisch (H-02)"
+  },
+  "kommunikation": [
+    {
+      "kanal": "Terminal",
+      "integration": "Claude Code CLI"
+    },
+    {
+      "kanal": "Slack",
+      "integration": "Webhook + Bot"
+    },
+    {
+      "kanal": "WhatsApp",
+      "integration": "Business API"
+    },
+    {
+      "kanal": "Linear",
+      "integration": "Linear API"
+    }
+  ],
+  "connectoren_mcp": [
+    {
+      "name": "GitHub",
+      "server": "@modelcontextprotocol/server-github"
+    },
+    {
+      "name": "Notion",
+      "server": "@modelcontextprotocol/server-notion"
+    },
+    {
+      "name": "Doc-Scanner",
+      "server": "Port 8101"
+    },
+    {
+      "name": "Brain-Tools",
+      "server": "brain-tools MCP"
+    },
+    {
+      "name": "Eigene",
+      "server": "Jederzeit hinzufuegbar"
+    }
+  ],
+  "optimierungen": [
+    "Smart Cache (~95% Token-Ersparnis bei Wiederholungen)",
+    "Feedback-Loop (Nutzer bewertet → Agenten lernen)",
+    "Batch-Processing (Tasks buendeln)",
+    "Auto-Approval Stufen (Routine ohne Bestaetigung)",
+    "Model-Fallback (Rate-Limit → naechstes Modell)",
+    "Fallback-Kette (Agent versagt → anderer)",
+    "Health-Check Hook (SessionStart prueft alles)",
+    "Template-Library (Code-Patterns wiederverwenden)",
+    "Kosten-Tracking (Token pro Agent messen)"
+  ],
+  "workflow_phasen_global": {
+    "1_briefing": "Nutzer → Berater → Rueckfragen → Plan + Task-Queue",
+    "2_planung": "Architekt: Design (OK/VETO) → Analyst: Code-Analyse",
+    "3_bau": "[Coder + Designer] parallel, Security-Hooks aktiv",
+    "4_test": "[Tester + Reviewer] parallel, Fehler → Coder fixt",
+    "5_abschluss": "Reviewer: Commit+Push → [Doku + Deploy] parallel",
+    "6_meldung": "Berater → Nutzer: Fertig + Zusammenfassung"
+  },
+  "workflow_phasen_agent": {
+    "planung": "Repos analysieren, Dependency-Maps erstellen, Vergleiche ausfuehren",
+    "bau": "Bei Bedarf Merge-Plaene liefern, Code-Metriken aktualisieren"
+  },
+  "docker_services": [
+    {
+      "service": "neo4j",
+      "port": "7474/7687",
+      "zweck": "S3+S5"
+    },
+    {
+      "service": "qdrant",
+      "port": 6333,
+      "zweck": "S2+S3"
+    },
+    {
+      "service": "redis",
+      "port": 6379,
+      "zweck": "S1+Cache+Event-Bus"
+    },
+    {
+      "service": "postgresql",
+      "port": 5432,
+      "zweck": "S6"
+    },
+    {
+      "service": "rag-api",
+      "port": 8100,
+      "zweck": "S4"
+    },
+    {
+      "service": "doc-scanner",
+      "port": 8101,
+      "zweck": "Doc-Scanner"
+    },
+    {
+      "service": "hipporag",
+      "port": 8102,
+      "zweck": "S3"
+    },
+    {
+      "service": "learning-graphs",
+      "zweck": "S5"
+    }
+  ],
+  "workflow": [
+    "Analyse-Task vom Berater",
+    "→ core_memory_read → Projekt-Kontext (Stack, Repos, Architektur)",
+    "→ memory_search → Fruehere Analysen zu diesem Repo?",
+    "→ Repo klonen/oeffnen → Struktur analysieren",
+    "→ Code-Metriken messen (radon, jscpd, cloc)",
+    "→ Dependency-Map erstellen → hipporag_ingest",
+    "→ Bei Vergleich: Funktions-Level Matching → Duplikate finden",
+    "→ memory_store → Ergebnisse speichern (Priority 5-7)",
+    "→ An Architekt (wenn Design-relevant) oder Berater",
+    "→ Event-Bus 'progress' → 'Analyse abgeschlossen'"
+  ],
+  "analyse_report_format": {
+    "template": "REPO: [Name/URL]",
+    "felder": [
+      "Sprache: ...",
+      "Dateien: ... | LoC: ...",
+      "Komplexitaet: ... (Cyclomatic Complexity, radon)",
+      "Duplikate: ...% (jscpd)",
+      "Abhaengigkeiten: [Liste mit Tiefe]",
+      "Ueberschneidungen mit: [Repo-B, Funktionen: datei:zeile]",
+      "Empfehlung: Merge/Trennen/Refactor + Begruendung"
+    ]
+  },
+  "claude_code_frontmatter": {
+    "name": "analyst",
+    "description": "Repos analysieren, vergleichen, Merges planen, Dependency-Mapping, Code-Metriken",
+    "model": "sonnet",
+    "tools": [
+      "Read",
+      "Glob",
+      "Grep",
+      "Bash",
+      "mcp__brain-tools__*",
+      "mcp__github__*"
+    ],
+    "permissionMode": "default"
+  }
+}

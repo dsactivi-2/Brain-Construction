@@ -22,3 +22,5 @@ config/databases.yaml
 # Temp
 *.tmp
 *.bak
+dashboard/node_modules/
+dashboard/.next/

@@ -4,13 +4,29 @@ Datenzugriff auf Neo4j (Graph) und Qdrant (Embeddings).
 Zwei Repository-Klassen: GraphRepository und GraphEmbeddingRepository.
 """
 
+import re
+import time
+import logging
+import threading
 from typing import List, Optional, Dict
 from datetime import datetime, timezone, timedelta
 
 from qdrant_client.models import PointStruct
 
 
+_logger = logging.getLogger(__name__)
+
 EMBEDDING_COLLECTION = "hipporag_embeddings"
+
+# ---------------------------------------------------------------------------
+# GDS Graph-Projection State (modul-weit, thread-safe)
+# ---------------------------------------------------------------------------
+
+_projection_lock = threading.Lock()
+_projection_exists = False
+_projection_last_refresh = 0.0
+_PROJECTION_TTL = 300  # 5 Minuten
+_PROJECTION_NAME = "brain-kg"
 
 
 class GraphRepository:
@@ -88,24 +104,200 @@ class GraphRepository:
     ) -> None:
         """Erstellt oder aktualisiert eine Beziehung (MERGE).
 
+        Unterstuetzt dynamische Relation-Typen (z.B. USES, CONTAINS, CREATES).
+        Sanitization gegen Cypher-Injection.
+
         Args:
             source: Name der Quell-Entitaet.
             target: Name der Ziel-Entitaet.
             rel_type: Beziehungstyp (default: "RELATED_TO").
             context: Kontext-Text der Beziehung.
         """
+        # Sanitize: nur Grossbuchstaben, Ziffern, Unterstriche
+        safe_rel_type = re.sub(r'[^A-Z0-9_]', '_', rel_type.upper())
+        if not safe_rel_type:
+            safe_rel_type = "RELATED_TO"
+
         with self._driver.session() as session:
             session.run(
-                """
-                MATCH (a:Entity {name: $source})
-                MATCH (b:Entity {name: $target})
-                MERGE (a)-[r:RELATED_TO]->(b)
+                f"""
+                MATCH (a:Entity {{name: $source}})
+                MATCH (b:Entity {{name: $target}})
+                MERGE (a)-[r:{safe_rel_type}]->(b)
                 SET r.context = $context, r.updated = datetime()
                 """,
                 source=source,
                 target=target,
                 context=context,
             )
+
+    # -------------------------------------------------------------------
+    # GDS Personalized PageRank
+    # -------------------------------------------------------------------
+
+    def ensure_graph_projection(self) -> bool:
+        """Stellt sicher, dass die GDS Graph-Projection existiert.
+
+        Thread-safe. Refresht alle 5 Minuten um neue Entities/Relations zu erfassen.
+
+        Returns:
+            True wenn Projection verfuegbar, False sonst.
+        """
+        global _projection_exists, _projection_last_refresh
+
+        now = time.time()
+
+        # Fast-Path: Projection existiert und ist frisch
+        if _projection_exists and (now - _projection_last_refresh) < _PROJECTION_TTL:
+            return True
+
+        with _projection_lock:
+            # Double-Check nach Lock-Erwerb
+            if _projection_exists and (now - _projection_last_refresh) < _PROJECTION_TTL:
+                return True
+
+            with self._driver.session() as session:
+                # Alte Projection droppen (falls vorhanden)
+                try:
+                    session.run(
+                        "CALL gds.graph.drop($name, false)",
+                        name=_PROJECTION_NAME,
+                    )
+                except Exception:
+                    pass
+
+                # Neue Projection erstellen (alle Relationship-Typen)
+                try:
+                    result = session.run(
+                        """
+                        CALL gds.graph.project(
+                            $name,
+                            'Entity',
+                            '*',
+                            {relationshipProperties: []}
+                        )
+                        YIELD nodeCount, relationshipCount
+                        RETURN nodeCount, relationshipCount
+                        """,
+                        name=_PROJECTION_NAME,
+                    )
+                    record = result.single()
+                    if record and record["nodeCount"] > 0:
+                        _projection_exists = True
+                        _projection_last_refresh = now
+                        _logger.info(
+                            "GDS projection '%s': %d nodes, %d rels",
+                            _PROJECTION_NAME,
+                            record["nodeCount"],
+                            record["relationshipCount"],
+                        )
+                        return True
+                    return False
+                except Exception as e:
+                    _logger.warning("GDS projection failed: %s", e)
+                    return False
+
+    def resolve_entity_nodes(self, names: List[str]) -> list:
+        """Loest Entity-Namen zu Neo4j Node-IDs auf (fuer GDS sourceNodes).
+
+        Args:
+            names: Liste von Entity-Namen.
+
+        Returns:
+            Liste von Neo4j Node-IDs.
+        """
+        if not names:
+            return []
+
+        with self._driver.session() as session:
+            result = session.run(
+                """
+                UNWIND $names AS name
+                MATCH (e:Entity)
+                WHERE toLower(e.name) CONTAINS toLower(name)
+                RETURN DISTINCT id(e) AS nodeId, e.name AS name
+                LIMIT 10
+                """,
+                names=names,
+            )
+            return [record["nodeId"] for record in result]
+
+    def personalized_pagerank(
+        self, seed_node_ids: list, top_k: int = 10,
+    ) -> List[dict]:
+        """Fuehrt Personalized PageRank aus (GDS).
+
+        Args:
+            seed_node_ids: Neo4j Node-IDs der Seed-Knoten.
+            top_k: Maximale Anzahl Ergebnisse.
+
+        Returns:
+            Liste von Dicts: [{entity, type, relations, ppr_score}]
+        """
+        if not seed_node_ids:
+            return []
+
+        with self._driver.session() as session:
+            # Schritt 1: PPR ausfuehren
+            ppr_results = session.run(
+                f"""
+                MATCH (seed) WHERE id(seed) IN $seedIds
+                WITH collect(seed) AS sourceNodes
+                CALL gds.pageRank.stream('{_PROJECTION_NAME}', {{
+                    maxIterations: 20,
+                    dampingFactor: 0.85,
+                    sourceNodes: sourceNodes
+                }})
+                YIELD nodeId, score
+                WITH gds.util.asNode(nodeId) AS node, score
+                RETURN node.name AS entity, node.type AS type, score
+                ORDER BY score DESC
+                LIMIT $topK
+                """,
+                seedIds=seed_node_ids,
+                topK=top_k,
+            )
+
+            entities = []
+            for record in ppr_results:
+                entities.append({
+                    "entity": record["entity"],
+                    "type": record["type"] or "Unknown",
+                    "ppr_score": record["score"],
+                })
+
+            if not entities:
+                return []
+
+            # Schritt 2: Relations fuer Top-Ergebnisse (batched)
+            entity_names = [e["entity"] for e in entities]
+            rel_results = session.run(
+                """
+                UNWIND $names AS entityName
+                MATCH (e:Entity {name: entityName})-[r]-(related:Entity)
+                RETURN e.name AS entity,
+                       collect(DISTINCT {
+                           name: related.name,
+                           type: related.type,
+                           relation: type(r)
+                       })[..10] AS relations
+                """,
+                names=entity_names,
+            )
+
+            relations_map = {}
+            for record in rel_results:
+                relations_map[record["entity"]] = record["relations"]
+
+            # Schritt 3: PPR-Scores mit Relations zusammenfuehren
+            for entity in entities:
+                entity["relations"] = relations_map.get(entity["entity"], [])
+
+            return entities
+
+    # -------------------------------------------------------------------
+    # Learning Graphs (S5)
+    # -------------------------------------------------------------------
 
     def upsert_pattern(self, entity_a: str, entity_b: str) -> dict:
         """Erstellt oder staerkt ein Pattern (Co-Occurrence).

@@ -4,7 +4,7 @@
 
 ### Was wird gebaut?
 Ein autonomes Multi-Agent-System fuer Claude Code das:
-- 10 spezialisierte Agenten koordiniert
+- 11 spezialisierte Agenten koordiniert (inkl. Memory-Manager)
 - 17 automatische Hooks ausfuehrt
 - Ein sechsschichtiges Gehirn-System nutzt (Core Memory + Mem0 Auto-Recall/Capture + HippoRAG 2 + Agentic RAG + Agentic Learning Graphs + Recall Memory)
 - Lokal (Terminal) und in der Cloud (24/7) laeuft
@@ -38,15 +38,15 @@ Ein autonomes Multi-Agent-System fuer Claude Code das:
 └──────┬──────┬──────┬──────┬──────┬──────┬──────┬──────┬────────┘
        │      │      │      │      │      │      │      │
        ▼      ▼      ▼      ▼      ▼      ▼      ▼      ▼
-┌────────┐┌────────┐┌────────┐┌────────┐┌────────┐┌────────┐┌────────┐┌────────┐
-│ARCHITEKT││ CODER  ││TESTER+ ││REVIEWER││DESIGNER││ANALYST ││DOC-    ││DEVOPS  │
-│         ││        ││DEBUGGER││        ││        ││        ││SCANNER ││        │
-│Design   ││Code    ││Test    ││Review  ││UI/UX   ││Repo    ││Web-Docs││CI/CD   │
-│Veto     ││Refactor││Debug   ││Commit  ││Design  ││Analyse ││Import  ││Deploy  │
-│Deps     ││Template││Fix     ││Push    ││a11y    ││Vergl.  ││Scan    ││Server  │
-└────────┘└────────┘└────────┘└────────┘└────────┘└────────┘└────────┘└────────┘
-       │      │      │      │      │      │      │      │
-       └──────┴──────┴──────┴──────┴──────┴──────┴──────┘
+┌────────┐┌────────┐┌────────┐┌────────┐┌────────┐┌────────┐┌────────┐┌────────┐┌────────┐
+│ARCHITEKT││MEMORY- ││ CODER  ││TESTER+ ││REVIEWER││DESIGNER││ANALYST ││DOC-    ││DEVOPS  │
+│         ││MANAGER ││        ││DEBUGGER││        ││        ││        ││SCANNER ││        │
+│Design   ││DB-     ││Code    ││Test    ││Review  ││UI/UX   ││Repo    ││Web-Docs││CI/CD   │
+│Veto     ││Health  ││Refactor││Debug   ││Commit  ││Design  ││Analyse ││Import  ││Deploy  │
+│Deps     ││Consol. ││Template││Fix     ││Push    ││a11y    ││Vergl.  ││Scan    ││Server  │
+└────────┘└────────┘└────────┘└────────┘└────────┘└────────┘└────────┘└────────┘└────────┘
+       │      │      │      │      │      │      │      │      │
+       └──────┴──────┴──────┴──────┴──────┴──────┴──────┴──────┘
                               │
                     ┌─────────┴─────────┐
                     ▼                   ▼
@@ -77,7 +77,12 @@ Ein autonomes Multi-Agent-System fuer Claude Code das:
 
 ---
 
-## 3. Agenten-Profile
+## 3. Agenten-Profile (11 Agenten + Grundprofil)
+
+> **v3.0**: Alle Agenten haben ein vollstaendiges JSON-Profil (`profile.json`) das aus dem
+> Grundprofil + Agent-spezifischen Daten gemerged wird. Das Merge-Script ist `merge_profiles.py`.
+> Jeder Agent hat zusaetzlich: `memory_strategie` (auto_capture + auto_recall),
+> `lade_strategie` (session_start/on_demand/nie_im_kontext), `query_beispiel` pro Tool.
 
 ### 3.0 GRUNDPROFIL (gilt fuer ALLE Agenten)
 
@@ -409,6 +414,47 @@ Ein autonomes Multi-Agent-System fuer Claude Code das:
 
 ---
 
+### 3.11 MEMORY-MANAGER (NEU in v3.0)
+
+**Modell-Default:** Sonnet (Routine-Maintenance), Opus (Konsolidierung, Migration)
+**Rolle:** Verwaltet das 6-Schichten Gehirn-System. DB-Health, Konsolidierung, Decay/Pruning, Snapshots.
+**Hierarchie:** 8 (zwischen Architekt und Coder)
+**Einziger Agent mit Zugriff auf ALLE 15 Brain-Tools.**
+
+#### Rules
+| Nr. | Rule |
+|-----|------|
+| R-11-01 | Konsolidierung WOECHENTLICH: S6 → LLM-Analyse → S3 |
+| R-11-02 | Decay/Pruning TAEGLICH: >90 Tage ungenutzt → Score sinkt |
+| R-11-03 | Graph-Snapshot VOR jeder Konsolidierung (APOC Export) |
+| R-11-04 | Max 7 Snapshots, aelteste rotieren |
+| R-11-05 | Warm-Up Cache invalidieren bei Core Memory Updates |
+| R-11-06 | Health-Check aller DBs bei SessionStart |
+| R-11-07 | DB-Ausfall → Degraded Mode + Notification |
+| R-11-08 | Priority-Scores kalibrieren (keine Inflation) |
+| R-11-09 | KEINE Daten loeschen ohne Snapshot |
+
+#### Commands
+| Command | Was |
+|---------|-----|
+| `/health-db` | Health-Check aller 4 Cloud-DBs |
+| `/consolidate` | Manuelle Konsolidierung (S6 → S3) |
+| `/prune` | Manuelles Decay/Pruning |
+| `/snapshot` | Graph-Snapshot erstellen (APOC Export) |
+| `/warm-up` | Warm-Up Cache refreshen |
+| `/seed` | Initiale Brain-Population |
+| `/stats` | Brain-System Statistiken |
+| `/rollback-graph` | Graph auf letzten Snapshot zuruecksetzen |
+
+#### Maintenance-Schedule
+| Zyklus | Tasks |
+|--------|-------|
+| Taeglich | Health-Check aller 4 DBs, Decay/Pruning, Warm-Up Cache pruefen |
+| Woechentlich | Graph-Snapshot, Konsolidierung (S6→S3), Orphan-Node-Analyse, Priority-Score Kalibrierung |
+| Monatlich | PostgreSQL Vacuum, Qdrant Collection Optimization, Redis Memory-Analyse, Performance-Report |
+
+---
+
 ## 4. Hooks (17 Stueck)
 
 Alle Hooks laufen automatisch. Command-type Hooks laufen ausserhalb von Claudes Kontext und verbrauchen 0 Tokens. Agent-type Hooks injizieren einen Prompt in den Kontext und verbrauchen daher Tokens.
@@ -643,8 +689,8 @@ Agenten kommunizieren ueber Redis Pub/Sub:
 - Kanäle: `bugs`, `decisions`, `progress`, `blocker`
 
 #### Conflict Resolution
-Hierarchie bei widersprüchlichen Shared-Writes (alle 10 Agenten):
-- Berater (10) > Architekt (9) > Coder (7) > Tester (6) >
+Hierarchie bei widersprüchlichen Shared-Writes (alle 11 Agenten):
+- Berater (10) > Architekt (9) > Memory-Manager (8) > Coder (7) > Tester (6) >
   Reviewer (5) > Designer (4) > Analyst (3) > Doc-Scanner (2) >
   DevOps (2) > Dokumentierer (1)
 - Bei gleicher Ebene: juengerer Eintrag gewinnt
@@ -962,10 +1008,93 @@ MELDUNG:
 
 ---
 
+## 16. Docker Services (v3.0)
+
+8 Services via `docker-compose.yml`:
+
+| Service | Image | Port | Schicht | Zweck |
+|---------|-------|------|:-------:|-------|
+| neo4j | neo4j:5-community | 7474/7687 | S3+S5 | Wissensgraph + Learning Graphs |
+| qdrant | qdrant/qdrant:latest | 6333 | S2+S3 | Vektor-Embeddings |
+| redis | redis:7-alpine | 6379 | S1 | Core Memory + Cache + Event-Bus |
+| recall-db | postgres:16-alpine | 5432 | S6 | Recall Memory |
+| rag-api | Custom (Python) | 8100 | S4 | Agentic RAG Router |
+| doc-scanner | Custom (Python) | 8101 | — | Web-Doku Scanner MCP |
+| hipporag | Custom (Python+spaCy) | 8102 | S3 | HippoRAG Service + NER |
+| learning-graphs | Custom (Python) | — | S5 | Pattern Detection + Graph Update |
+
+```bash
+# Start (Mac):
+./setup-mac.sh
+
+# Start (manuell):
+docker compose up -d
+```
+
+---
+
+## 17. v3.0 Profil-System
+
+Jeder Agent hat zwei Dateien:
+- `agents/{name}/CLAUDE.md` — Anweisungen fuer Claude Code
+- `agents/{name}/profile.json` — Vollstaendiges JSON-Profil (gemerged)
+
+### Merge-Prozess
+```
+00-grundprofil.json (24 KB, shared)
+  + 01-berater.json ... 11-memory-manager.json (agent-spezifisch)
+  → merge_profiles.py
+  → agents/{name}/profile.json (32-42 KB, self-contained)
+```
+
+### Merge-Regeln
+- **Arrays**: Grundprofil-first, dann Agent (concatenated)
+- **Objects**: Agent ueberschreibt Grundprofil bei gleichen Keys (deep merge)
+- **Tools**: Agent definiert sein Subset (NICHT alle 15)
+- **Regeln**: R-00-* (Grundprofil) + R-XX-* (Agent)
+
+### v3.0 Neue Felder (pro Agent)
+| Feld | Inhalt |
+|------|--------|
+| `memory_strategie.auto_capture` | Was bei Session-Ende automatisch gespeichert wird |
+| `memory_strategie.auto_recall` | Was bei User-Prompt automatisch geladen wird |
+| `lade_strategie.session_start` | Was beim Start geladen wird (Token-Budget) |
+| `lade_strategie.on_demand` | Was nur bei Bedarf geladen wird |
+| `lade_strategie.nie_im_kontext` | Was NIE in den Kontext geladen wird |
+| `query_beispiel` | Beispiel-Queries pro Tool fuer bessere Nutzung |
+
+---
+
+## 18. Setup
+
+### Mac
+```bash
+git clone -b ddd-v3-architecture https://github.com/dsactivi-2/Brain-Construction.git ~/Desktop/claude-agent-team
+cd ~/Desktop/claude-agent-team
+./setup-mac.sh
+```
+
+### Windows
+```bash
+git clone -b ddd-v3-architecture https://github.com/dsactivi-2/Brain-Construction.git ~/Desktop/claude-agent-team
+cd ~/Desktop/claude-agent-team
+# Docker Desktop starten
+docker compose up -d
+python merge_profiles.py  # (oder config/agent-profiles/merge_profiles.py)
+```
+
+### Danach
+1. `CLAUDE_API_KEY` in `.env` eintragen
+2. Cloud-URIs in `.env` eintragen (optional, fuer Fallback)
+3. Claude CLI: `npm install -g @anthropic-ai/claude-code`
+4. Agent starten: `claude --agent agents/berater/CLAUDE.md`
+
+---
+
 ## Verwandte Dokumente
 
 - 02-RUNBOOK.md — Bau-Reihenfolge und technische Befehle
 - 03-SETUP-ANLEITUNG.md — Detaillierte Einrichtung aller Komponenten
 - 04-INSTALLATIONS-GUIDE.md — Schritt-fuer-Schritt Installation (Terminal + Cloud)
-- 05-USER-MANUAL-DETAIL-ADMIN.md — Vollstaendiges Benutzerhandbuch (Admin)
+- 05-USER-MANUAL.md — Benutzerhandbuch (Schnelleinstieg + Referenz)
 - 06-USER-MANUAL-KURZ-ADMIN.md — Kurzanleitung (Admin)

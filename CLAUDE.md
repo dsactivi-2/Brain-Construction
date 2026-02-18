@@ -96,28 +96,29 @@ memory_store(text, scope, type, priority)
 
 Default: Auto nach Type (Entscheidung=9, Fakt=7, Praeferenz=6, Fehler=8, Todo=5)
 
-## Agenten-System — 10 Rollen
+## Agenten-System — 11 Rollen
 
 | Nr | Agent | Hierarchie | Modell | Hauptaufgabe |
 |:--:|-------|:----------:|--------|-------------|
 | 1 | BERATER | 10 | Opus | Orchestrator — einziger Nutzer-Kontakt, Task-Queue |
 | 2 | ARCHITEKT | 9 | Opus | System-Design, Struktur, Veto-Recht |
-| 3 | CODER | 7 | Sonnet/Opus | Implementierung, Refactoring |
-| 4 | TESTER | 6 | Sonnet/Opus | Tests schreiben + ausfuehren, Debugging |
-| 5 | REVIEWER | 5 | Sonnet/Opus | Code pruefen, Fehler fixen, Commit + Push |
-| 6 | DESIGNER | 4 | Sonnet/Opus | UI/UX, Frontend, Design-System |
-| 7 | ANALYST | 3 | Sonnet/Opus | Repos analysieren, vergleichen, Merges |
-| 8 | DOC-SCANNER | 2 | Haiku/Sonnet | Web-Dokumentationen scannen + importieren |
-| 9 | DEVOPS | 2 | Sonnet/Opus | CI/CD, Server, Deploy, Rollback |
-| 10 | DOKUMENTIERER | 1 | Haiku/Sonnet | Automatische Dokumentation |
+| 3 | MEMORY-MANAGER | 8 | Sonnet/Opus | Brain-System Verwaltung, DB-Health, Konsolidierung |
+| 4 | CODER | 7 | Sonnet/Opus | Implementierung, Refactoring |
+| 5 | TESTER | 6 | Sonnet/Opus | Tests schreiben + ausfuehren, Debugging |
+| 6 | REVIEWER | 5 | Sonnet/Opus | Code pruefen, Fehler fixen, Commit + Push |
+| 7 | DESIGNER | 4 | Sonnet/Opus | UI/UX, Frontend, Design-System |
+| 8 | ANALYST | 3 | Sonnet/Opus | Repos analysieren, vergleichen, Merges |
+| 9 | DOC-SCANNER | 2 | Haiku/Sonnet | Web-Dokumentationen scannen + importieren |
+| 10 | DEVOPS | 2 | Sonnet/Opus | CI/CD, Server, Deploy, Rollback |
+| 11 | DOKUMENTIERER | 1 | Haiku/Sonnet | Automatische Dokumentation |
 
 ### Conflict Resolution
 
 Bei widersprüchlichen Anweisungen gilt die Hierarchie:
 ```
-Berater (10) > Architekt (9) > Coder (7) > Tester (6) >
-Reviewer (5) > Designer (4) > Analyst (3) > Doc-Scanner (2) >
-DevOps (2) > Dokumentierer (1)
+Berater (10) > Architekt (9) > Memory-Manager (8) > Coder (7) >
+Tester (6) > Reviewer (5) > Designer (4) > Analyst (3) >
+Doc-Scanner (2) > DevOps (2) > Dokumentierer (1)
 
 Bei gleicher Ebene: Juengster Eintrag gewinnt
 Unloesbar: Automatische Blocker-Frage an Admin/Supervisor
