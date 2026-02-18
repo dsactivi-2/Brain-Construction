@@ -4,19 +4,19 @@
   "blocks": {
     "USER": {
       "max_chars": 4000,
-      "content": "Name: DS (dsselmanovic)\nFirma: Step2Job GmbH — Personalvermittlung fuer Fachkraefte vom Balkan nach Deutschland\nGitHub Organizations: devshift-stack, jobstep-int-gmbh, dsactivi-2\nFokus: AI Agent Systems, Multi-Agent Orchestration, Automation, Recruitment Tech\nKommunikation: Direkt, Bullet Points, keine Floskeln\nSprache: Deutsch (Code-Kommentare: Englisch erlaubt)",
+      "content": "",
       "storage": "redis",
       "description": "SHARED — Wer ist der Nutzer? Name, Rolle, Vorlieben, Kommunikationsstil"
     },
     "PROJEKT": {
       "max_chars": 4000,
-      "content": "Cloud Code Team 02.26 — Multi-Agenten Brain-System\nArchitektur: DDD v3 mit 4 Bounded Contexts + Shared Kernel\nSchichten: S1 Core Memory, S2 Semantic Memory, S3 HippoRAG, S4 Agentic RAG, S5 Learning Graphs, S6 Recall Memory\nDatenbanken: Qdrant (Vektoren), Neo4j (Graph), Redis (Cache+PubSub), PostgreSQL (Recall), SQLite (Fallback)\nTech Stack: Python 3.12, FastAPI, sentence-transformers (all-MiniLM-L6-v2, 384-dim)\nFrontend-Stack (andere Projekte): React, Flutter\nBackend-Stack: Node.js, Python/FastAPI\nInfra: AWS, Docker, Terraform, GitHub Actions\n10 Agenten: Berater(10), Architekt(9), Coder(7), Tester(6), Reviewer(5), Designer(4), Analyst(3), Doc-Scanner(2), DevOps(2), Dokumentierer(1)\nVerfuegbare Projekte: alan_demo_app, alan-app, amp-brain, ArenaPro-Plus, code-cloud-agents, crm, CRM-activi, Housefinder, kids-ai-*, Li-KI-Training, partner, research-agent, salesops-voice-ai, voice-sales-agent",
+      "content": "",
       "storage": "redis",
       "description": "SHARED — Aktuelles Projekt: Name, Stack, Architektur, wichtige Entscheidungen"
     },
     "ENTSCHEIDUNGEN": {
       "max_chars": 4000,
-      "content": "UI Test-IDs: Flutter Key('screenName_element_name'), React data-testid='screenName_element_name', React Native testID='screenName_element_name'. Naming: screenName_elementType_beschreibung (z.B. login_button_submit).\nEnvironment Variables IMMER fuer API Keys, DB Credentials, Service URLs. Strukturiertes Logging IMMER.\nTest Coverage: 80% Minimum. Unit Tests fuer Funktionen/Logik. Widget Tests fuer UI. Integration Tests fuer Flows. Tests IMMER zusammen mit Code erstellen.\nDoku-Style: Technical (praezise, strukturiert, Code-Beispiele), Code (knapp, erklaert WARUM), User (direkt, Bullet Points), Reporting (Summary > Done > In Progress > Blockers > Metrics > Next Steps).\nDDD v3: Repository Pattern mit Constructor Injection, Composition Root (factory.py), @lru_cache Singletons, Compat-Wrapper fuer alte Imports.\nPasswoerter: Nur in .env, nie in Code/YAML. databases.yaml nutzt ${ENV_VAR:-default} Platzhalter.",
+      "content": "",
       "storage": "redis",
       "description": "SHARED — Getroffene Architektur- und Design-Entscheidungen mit Begruendung"
     },
